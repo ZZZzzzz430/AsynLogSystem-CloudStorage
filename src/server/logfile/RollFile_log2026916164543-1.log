@@ -1,0 +1,13 @@
+[15:43:46][140737353167552[INFO][asynclogger][DataManager.hpp:50]	DataManager construct start
+[15:44:26][140737353167552[INFO][asynclogger][Config.hpp:37]	ReadConfig start
+[15:44:26][140737353167552[INFO][asynclogger][Config.hpp:30]	ReadConfig complicate
+[15:44:26][140737353167552[INFO][asynclogger][DataManager.hpp:65]	init datamanager
+[15:44:26][140737353167552[INFO][asynclogger][DataManager.hpp:133]	data_message Insert start
+[15:44:30][140737353167552[INFO][asynclogger][DataManager.hpp:142]	data_message Insert end
+[15:44:30][140737353167552[INFO][asynclogger][DataManager.hpp:133]	data_message Insert start
+[15:44:30][140737353167552[INFO][asynclogger][DataManager.hpp:142]	data_message Insert end
+[15:44:30][140737353167552[INFO][asynclogger][DataManager.hpp:56]	DataManager construct end
+[15:44:36][140737157007040[DEBUG][asynclogger][Service.hpp:26]	Service start(Construct)
+[15:44:36][140737157007040[DEBUG][asynclogger][Service.hpp:32]	Service end(Construct)
+[15:44:36][140737157007040[INFO][asynclogger][Test.cpp:17]	service step in RunModule
+[15:44:42][140737157007040[DEBUG][asynclogger][Service.hpp:64]	event_base_dispatch

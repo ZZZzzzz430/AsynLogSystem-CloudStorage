@@ -8,6 +8,7 @@
 #include <iostream>
 using std::cout;
 using std::endl;
+
 namespace mylog
 {
     namespace Util
@@ -145,19 +146,29 @@ namespace mylog
             }
         };
         struct JsonData{
-            static JsonData* GetJsonData(){
+          static JsonData* GetJsonData(){
                static JsonData* json_data = new JsonData;
                return json_data;
             }
             private:
                 JsonData(){
                 std::string content;
+                std::string str;
+                std::string config_path = "../../log_system/logs_code/config.conf";
+
+                // 设置一个检测配置信息
                 mylog::Util::File file;
                 if (file.GetContent(&content, "../../log_system/logs_code/config.conf") == false){
                     std::cout << __FILE__ << __LINE__ << "open config.conf failed" << std::endl;
+                    throw std::runtime_error("read config file failed");
                     perror(NULL);
                 }
                 Json::Value root;
+                if (!JsonUtil::UnSerialize(str, &root)) {
+                  throw std::runtime_error("parse config file failed");
+                }
+
+
                 mylog::Util::JsonUtil::UnSerialize(content, &root); // 反序列化，把内容转成jaon value格式
                 buffer_size = root["buffer_size"].asInt64();
                 threshold = root["threshold"].asInt64();
