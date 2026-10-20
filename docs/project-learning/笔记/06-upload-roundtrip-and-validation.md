@@ -1,6 +1,10 @@
 # 阶段 2：上传下载闭环与上传入口校验
 
+进度更新（2026-10-09）：用户报告已过完本篇并要求开始下一阶段，现进入 07 的异步日志学习。此状态来自用户反馈；本次未重新执行 HTTP 验收，尚未附具体实验输出，不将其记作助手实测通过。以下历史任务与验证记录保留。
+
 日期：2026-09-28。状态：已检查源码，本次布置实验与改造；未运行 HTTP 实验，未替用户实现核心代码。
+
+最新状态（2026-10-08）：按用户后续授权已修正并接入上传入口校验，调试版与普通版编译通过；HTTP 实验由用户次日执行，尚未标记运行验收通过。原始任务与此前评审保留在下文。
 
 本阶段按 2～3 小时时间盒推进：20 分钟追主链，30 分钟正常实验和断点，60 分钟改造，30 分钟回归与复盘。完整配置校验留为待办，不阻塞主线。此前配置修复记录是当时的验证结果，不代表当前所有代码均已重新验证。
 
@@ -14,10 +18,10 @@
 
 ## 2. 源码范围与对象
 
-- [Test.cpp](../../src/server/Test.cpp)：`main → service_module`，创建 HTTP 线程和全局 `data_`。
-- [Service.hpp](../../src/server/Service.hpp)：`RunModule / GenHandler / Upload / ListShow / Download`。
-- [Util.hpp](../../src/server/Util.hpp)：`FileUtil::SetContent`，只追普通文件写入。
-- [DataManager.hpp](../../src/server/DataManager.hpp)：`StorageInfo::NewStorageInfo`，`Insert / Storage / GetOneByURL`。
+- [Test.cpp](../../../src/server/Test.cpp)：`main → service_module`，创建 HTTP 线程和全局 `data_`。
+- [Service.hpp](../../../src/server/Service.hpp)：`RunModule / GenHandler / Upload / ListShow / Download`。
+- [Util.hpp](../../../src/server/Util.hpp)：`FileUtil::SetContent`，只追普通文件写入。
+- [DataManager.hpp](../../../src/server/DataManager.hpp)：`StorageInfo::NewStorageInfo`，`Insert / Storage / GetOneByURL`。
 
 `Service s` 是 `service_module` 的栈对象，在事件循环返回后析构。`server_port_` 用于监听；`server_ip_` 虽被读取，实际绑定代码使用 `0.0.0.0`；`download_prefix_` 被缓存，但路由判定仍硬编码 `/download/`。不要把配置存在等同于配置实际生效。
 
@@ -212,3 +216,62 @@ strace -f -tt -T -e trace=openat,write,close,fsync,fdatasync \
    - 如果响应 200，但重启后列表没有该文件，你沿哪条链查证？
 
 完成这些再评审本模块；当前不标记通过。通过后下一模块是异步日志主链路，本次不提前展开。
+
+## 10. 2026-10-08：Service.hpp 修改评审
+
+结论：当前修改尚不满足本文件第 7 节的入口校验要求，暂不通过。证据为当前源码、Git 差异，以及实际执行 `make -C src/server gdb_test` 的结果（退出码 2）。本次未修改业务代码；未运行当前版本的 HTTP 验收，因为当前版本无法编译。已有二进制不能证明这些修改生效。
+
+### 编译阻塞：实际编译确认的四处错误
+
+| 当前位置 | 问题 | 修正方向 |
+|---|---|---|
+| `Service.hpp:119` | `UploadParams` 结构体结尾缺分号 | 以 `};` 结束 |
+| `Service.hpp:136` | 条件末尾为 `filename == ".." ||)`，缺少右操作数 | 删除末尾多余的 `||` |
+| `Service.hpp:124、154` | 枚举声明为 `MethodNotAllowd`，使用为 `MethodNotAllowed` | 统一为 `MethodNotAllowed` |
+| `Service.hpp:188` | `base64_decode(name)` 调用歧义：C++17 下同时存在 `std::string` 和 `std::string_view` 重载 | 指针校验成功后显式传入 `std::string(name)` |
+
+### 核心行为缺口：校验尚未进入请求链路
+
+`GenHandler → Upload` 的调用链仍直接执行原有上传逻辑，`Upload` 没有调用 `ValidateUploadRequest`，也没有使用 `UploadParams`。因此，即使仅修复以上编译错误，新校验仍不会生效：
+
+- 方法检查被注释，不能保证非 POST 返回 405 和 `Allow: POST`。
+- 原有 `Upload` 在第 232 行分配 `content`，此前没有大小限制，不能保证超限返回 413。
+- 第 241、246 行仍将请求头返回指针直接用于构造字符串；缺失头的异常风险仍在。空头也未在实际处理链路拒绝。
+- 解码后的文件名仍未经 `IsValidFilename` 检查就拼入存储路径，不能保证非法文件名在创建目录、写文件和更新索引前被拒绝。
+- `UploadError` 还没有映射到 HTTP 响应；返回枚举本身不会回复客户端。
+
+已有辅助函数的拆分方向合理：先检查方法、请求体和大小，再检查请求头、存储类型、解码后文件名；`len > 1024 * 1024` 的比较保留了恰好 1 MiB 的合法边界；文件名检查覆盖了任务要求的类别。这些属于源码设计评价，尚不是运行通过。
+
+### 下一次修改与验收顺序
+
+1. 先修复四处编译错误。
+2. 在 `Upload` 开头、分配 `content` 之前调用校验函数。失败时将方法错误映射为 405（加 `Allow: POST`），超限映射为 413，其余输入错误映射为 400；每个失败请求回复一次并立即返回。
+3. 成功后使用 `params.filename / storageType / contentLength` 继续原上传流程，替换旧的未经检查的请求头读取与重复解码。
+4. 重新编译，在独立实验目录用新二进制执行第 7 节全部拒绝分支、1 MiB 和 1 MiB + 1 边界，以及正常上传、列表、下载内容比对。检查每次拒绝没有改变存储文件与索引，并确认合法请求仍可继续成功。
+
+补充健壮性问题：本仓库 `base64.cpp` 的解码器遇到部分非法字符或不完整输入会抛出 `std::runtime_error` / `std::out_of_range`。当前校验函数未捕获。第 7 节不要求实现严格 Base64 校验器，但建议在解码边界捕获这两种输入异常并返回文件名错误，避免异常逃出 HTTP 回调；这一点是补充建议，不将严格 Base64 校验追加为原任务要求。
+
+本次只完成代码评审与编译验证；正常闭环、故障调用栈、边界无副作用证据和第 9 节三题回答尚未在本次验证中完成，不标记整个学习模块通过。
+
+## 11. 2026-10-08：按授权修正，等待 HTTP 实验
+
+用户要求助手修正到能够编译且符合入口要求，HTTP 测试等内容留到次日由用户完成。本次已修改 `Service.hpp`：
+
+- 修正结构体分号、条件表达式、枚举拼写和 Base64 重载歧义。
+- 在 `Upload` 开头调用 `ValidateUploadRequest`；失败回复一次并立即返回，先于内容字符串分配、目录创建、文件写入和索引更新。
+- 非 POST 映射为 405，并添加 `Allow: POST`；大于 1048576 字节映射为 413；空请求体、缺失或空头、非法类型、非法解码后文件名映射为 400。
+- 成功路径使用校验后的参数，移除旧的直接从请求头指针构造字符串与重复解码。解码器的输入异常转换为文件名错误。
+- 配置 libevent 允许其支持的全部已知方法进入路由，避免 PUT、PATCH 等方法在到达上传入口前被库的默认方法策略拒绝。此设置作用于整个 HTTP 服务；上传入口仍只接受 POST。
+- 请求内容复制使用 C++17 的可写 `content.data()`，检查实际复制字节数；长度日志格式改为 `%zu`。
+
+实际验证：`make -C src/server gdb_test` 和 `make -C src/server -B test` 均退出 0；`git diff --check` 通过。`gdb_test`、`test` 已重新生成。本次未启动服务、未执行 HTTP 测试，也未修改存储数据。
+
+明日按第 4、7 节进行独立目录验收，务必复制本次新生成的二进制。重点记录：
+
+1. 合法上传 200，列表和元数据可查，下载后 `cmp` 与 SHA-256 一致。
+2. GET、PUT、PATCH 等非 POST 请求 `/upload` 返回 405，响应头包含 `Allow: POST`。
+3. 空体、两个头分别缺失或为空、非法类型，以及解码后为空、`.`、`..`、含 `/`、反斜杠、NUL 的文件名分别返回 400。可以补测非法 Base64 字符和单字符输入，确认进程仍存活。
+4. 恰好 1048576 字节成功，1048577 字节返回 413。
+5. 每次拒绝前后比较存储目录与 `storage.data`，确认无变化；随后发送合法请求，确认服务继续可用。
+
+当前结论：源码已落实本次入口契约、编译通过，运行行为待实测；整个阶段仍待实验和复盘。请求体大小检查仍发生在 libevent 已接收请求体之后；存储失败传播问题仍按第 9 节记录为后续范围。

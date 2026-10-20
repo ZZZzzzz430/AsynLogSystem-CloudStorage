@@ -18,7 +18,7 @@
 
 前面的启动诊断只打印工作目录与配置路径；这次让检查结果真正控制服务能否启动。
 
-修改位置：[src/server/Test.cpp](../../src/server/Test.cpp)。这个文件是服务端入口，`make test` 和 `make gdb_test` 都编译它，后者增加调试信息。因此本次修改直接参与实际服务启动。
+修改位置：[src/server/Test.cpp](../../../src/server/Test.cpp)。这个文件是服务端入口，`make test` 和 `make gdb_test` 都编译它，后者增加调试信息。因此本次修改直接参与实际服务启动。
 
 ## 1. 编写检查函数
 

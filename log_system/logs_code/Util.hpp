@@ -6,6 +6,9 @@
 #include <ctime>
 #include <fstream>
 #include <iostream>
+#include <memory>
+#include <sstream>
+#include <stdexcept>
 using std::cout;
 using std::endl;
 
@@ -142,7 +145,7 @@ namespace mylog
                     std::cout <<__FILE__<<__LINE__<<"parse error" << err<<std::endl;
                     return false;
                 }
-                return false;
+                return true;
             }
         };
         struct JsonData{
@@ -153,23 +156,17 @@ namespace mylog
             private:
                 JsonData(){
                 std::string content;
-                std::string str;
-                std::string config_path = "../../log_system/logs_code/config.conf";
+                const std::string config_path = "../../log_system/logs_code/config.conf";
 
                 // 设置一个检测配置信息
                 mylog::Util::File file;
-                if (file.GetContent(&content, "../../log_system/logs_code/config.conf") == false){
-                    std::cout << __FILE__ << __LINE__ << "open config.conf failed" << std::endl;
-                    throw std::runtime_error("read config file failed");
-                    perror(NULL);
+                if (file.GetContent(&content, config_path) == false){
+                    throw std::runtime_error("read config file failed: " + config_path);
                 }
                 Json::Value root;
-                if (!JsonUtil::UnSerialize(str, &root)) {
-                  throw std::runtime_error("parse config file failed");
+                if (!JsonUtil::UnSerialize(content, &root)) {
+                  throw std::runtime_error("parse config file failed: " + config_path);
                 }
-
-
-                mylog::Util::JsonUtil::UnSerialize(content, &root); // 反序列化，把内容转成jaon value格式
                 buffer_size = root["buffer_size"].asInt64();
                 threshold = root["threshold"].asInt64();
                 linear_growth = root["linear_growth"].asInt64();

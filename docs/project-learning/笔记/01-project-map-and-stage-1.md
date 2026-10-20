@@ -2,7 +2,7 @@
 
 整理日期：2026-09-21。
 
-依据：项目根目录的 [AGENT.md](../../AGENT.md)，以及服务端、日志库、备份服务和客户端源码。
+依据：项目根目录的 [AGENT.md](../../../AGENT.md)，以及服务端、日志库、备份服务和客户端源码。
 
 本文对应首次项目地图回答。分析时仅阅读代码，没有实际启动服务。下文的线程数量为源码推导，实验结果需要运行验证。
 
@@ -12,10 +12,10 @@
 
 | 入口 | 文件 | 用途 |
 |---|---|---|
-| 存储服务端 | [src/server/Test.cpp](../../src/server/Test.cpp) | 初始化日志、加载元数据、启动 HTTP |
-| 日志示例 | [log_system/examples/test.cpp](../../log_system/examples/test.cpp) | 单独触发各级日志 |
-| 日志备份服务 | [ServerBackupLog.cpp](../../log_system/logs_code/backlog/ServerBackupLog.cpp) | 接收 TCP 日志并保存 |
-| 目录上传客户端 | [src/client/Test.cpp](../../src/client/Test.cpp) | 扫描目录，上传新增或变化的文件 |
+| 存储服务端 | [src/server/Test.cpp](../../../src/server/Test.cpp) | 初始化日志、加载元数据、启动 HTTP |
+| 日志示例 | [log_system/examples/test.cpp](../../../log_system/examples/test.cpp) | 单独触发各级日志 |
+| 日志备份服务 | [ServerBackupLog.cpp](../../../log_system/logs_code/backlog/ServerBackupLog.cpp) | 接收 TCP 日志并保存 |
+| 目录上传客户端 | [src/client/Test.cpp](../../../src/client/Test.cpp) | 扫描目录，上传新增或变化的文件 |
 
 浏览器页面位于 `src/server/index.html`。第一轮联调建议使用浏览器或 curl：现有 C++ 客户端直接发送文件名，服务端却按 Base64 解码，协议尚未统一；客户端还存在 `Sleep(1)` 的平台兼容问题。
 
@@ -199,9 +199,9 @@ URL → 查询元数据
 
 只看三个位置：
 
-- [Test.cpp](../../src/server/Test.cpp)：`main()`、`log_system_module_init()`。
-- [日志 Util.hpp](../../log_system/logs_code/Util.hpp)：`JsonData` 构造函数。
-- [Config.hpp](../../src/server/Config.hpp)：`ReadConfig()`。
+- [Test.cpp](../../../src/server/Test.cpp)：`main()`、`log_system_module_init()`。
+- [日志 Util.hpp](../../../log_system/logs_code/Util.hpp)：`JsonData` 构造函数。
+- [Config.hpp](../../../src/server/Config.hpp)：`ReadConfig()`。
 
 这里有两条相对路径：
 

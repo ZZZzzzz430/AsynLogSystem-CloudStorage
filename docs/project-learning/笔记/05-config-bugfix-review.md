@@ -6,7 +6,7 @@
 
 ### 1. 数据读进 content，却解析空的 str
 
-位置：[日志 Util.hpp](../../log_system/logs_code/Util.hpp)，`JsonData` 构造函数。
+位置：[日志 Util.hpp](../../../log_system/logs_code/Util.hpp)，`JsonData` 构造函数。
 
 原改动声明 `std::string str;`，但文件读取写入的是 `content`。随后 `UnSerialize(str, &root)` 解析空字符串，因此即使配置文件合法也会抛解析失败异常。
 
@@ -84,3 +84,29 @@ main
 本次完成“读取 → 解析 → 失败传递”的纠错，没有增加完整字段类型、取值范围校验。合法 JSON 中的错误业务值仍属于待办。没有执行 HTTP 上传下载回归，因为未修改 HTTP 处理逻辑。
 
 需要记住的三个检查习惯：先追变量的数据来源，再确认命名空间和实际函数，最后分别验证成功与失败路径。
+
+
+## 2026-09-28：启动故障再次复现与修复
+
+用户报告 `./gdb_test` 启动失败。本次在 `src/server` 实际运行，退出码为 1，输出 JSON 第 1 行解析错误及 `[startup]parse config file failed`。
+
+检查发现当前日志 `Util.hpp` 仍包含“读取 content、解析空 str”和“解析成功返回 false”两处错误。已修正为解析实际读取的 content、成功返回 true，并删除重复解析与 throw 后不可达语句，补全标准库头文件和异常中的配置路径。没有修改上传入口教学任务。
+
+实际验证：
+
+- `make gdb_test` 编译成功；`git diff --check` 通过。
+- 临时目录 `/tmp/asynlog-startup-check-3o93ssu7` 中运行真实服务二进制，使用临时端口。
+- 非法 JSON、空配置、缺失配置分别退出 1。
+- 正常配置启动成功，HTTP 首页返回 200。
+- 普通上传返回 200；列表包含文件；下载返回 200，含 NUL 和非 ASCII 字节的二进制内容完全一致。
+- 磁盘文件内容与元数据索引检查通过。测试服务已停止，原有存储数据未改动。
+
+启动命令：
+
+```bash
+cd /home/zhang/code/Poject/AsynLogSystem/src/server
+make gdb_test
+./gdb_test
+```
+
+程序仍使用相对于工作目录的配置路径，需在上述目录运行。此次验证解决当前启动错误与基础 HTTP 闭环，不代表全部异常场景均已修复。

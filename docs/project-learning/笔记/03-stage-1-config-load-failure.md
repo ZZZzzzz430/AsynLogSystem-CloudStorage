@@ -16,8 +16,8 @@
 
 只改两个文件：
 
-- [日志 Util.hpp](../../log_system/logs_code/Util.hpp)：`JsonUtil::UnSerialize`、`JsonData` 构造函数。
-- [服务入口 Test.cpp](../../src/server/Test.cpp)：在初始化调用边界处理配置加载异常。
+- [日志 Util.hpp](../../../log_system/logs_code/Util.hpp)：`JsonUtil::UnSerialize`、`JsonData` 构造函数。
+- [服务入口 Test.cpp](../../../src/server/Test.cpp)：在初始化调用边界处理配置加载异常。
 
 注意不要误改同名的 `src/server/Util.hpp`。本次只完善日志配置，不展开存储配置、线程池和 Buffer 内部实现。
 
