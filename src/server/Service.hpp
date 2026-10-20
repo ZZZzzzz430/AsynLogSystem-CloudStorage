@@ -11,12 +11,66 @@
 #include <sys/stat.h>
 
 #include <regex>
+#include <stdexcept>
+#include <utility>
 
 #include "base64.h" // 来自 cpp-base64 库
+#include <string>
+#include <thread>
+#include <chrono>
+#include <sstream>
+#include <cstdio>
 
 extern storage::DataManager *data_;
 namespace storage
 {
+    class ScopeTimer
+    {
+    public:
+        using Clock = std::chrono::steady_clock;
+
+        // BUG-S01：构造函数、复制声明必须与 ScopeTimer 类名一致。
+        explicit ScopeTimer(std::string path)
+            : path_(std::move(path)), start_time_(Clock::now()),
+              thread_id_(std::this_thread::get_id()) {}
+        ScopeTimer(const ScopeTimer&) = delete;
+        ScopeTimer& operator=(const ScopeTimer&) = delete;
+
+        ~ScopeTimer() noexcept
+        {
+            // BUG-S02：try/catch 使用合法语法，析构中的异常不能向外传播。
+            try
+            {
+                const auto cost_ms = std::chrono::duration_cast<
+                    std::chrono::milliseconds>(Clock::now() - start_time_).count();
+                std::ostringstream message;
+                message << "callback path=" << path_ << " cost_ms=" << cost_ms
+                        << " thread=" << thread_id_;
+                const std::string text = message.str();
+                auto logger = mylog::GetLogger("asynclogger");
+                if (!logger)
+                    throw std::runtime_error("callback logger unavailable");
+
+                // BUG-S03：接入项目日志；每次回调按耗时只记录一个等级。
+                if (cost_ms > kSlowCallbackMs)
+                    logger->Warn("%s", text.c_str());
+                else
+                    logger->Info("%s", text.c_str());
+            }
+            catch (...)
+            {
+                // 不再次调用日志器，避免失败后递归；C 标准错误输出不抛 C++ 异常。
+                std::fputs("[callback-timer] failed to record callback duration\n", stderr);
+            }
+        }
+
+    private:
+        static constexpr long long kSlowCallbackMs = 100;
+        std::string path_;
+        Clock::time_point start_time_;
+        std::thread::id thread_id_;
+    };
+
     class Service
     {
     public:
@@ -56,6 +110,11 @@ namespace storage
             }
             // 设定回调函数
             // 指定generic callback，也可以为特定的URI指定callback
+            // 让已知 HTTP 方法进入路由，由上传入口统一返回 405 和 Allow。
+            evhttp_set_allowed_methods(httpd,
+                EVHTTP_REQ_GET | EVHTTP_REQ_POST | EVHTTP_REQ_HEAD |
+                EVHTTP_REQ_PUT | EVHTTP_REQ_DELETE | EVHTTP_REQ_OPTIONS |
+                EVHTTP_REQ_TRACE | EVHTTP_REQ_CONNECT | EVHTTP_REQ_PATCH);
             evhttp_set_gencb(httpd, GenHandler, NULL);
 
             if (base)
@@ -83,12 +142,18 @@ namespace storage
     private:
         static void GenHandler(struct evhttp_request *req, void *arg)
         {
-            std::string path = evhttp_uri_get_path(evhttp_request_get_evhttp_uri(req));
+            // BUG-S04：URI/path 指针可能为空；计时与路由使用同一份解码路径。
+            const auto* uri = evhttp_request_get_evhttp_uri(req);
+            const char* raw_path = uri ? evhttp_uri_get_path(uri) : nullptr;
+            std::string path = raw_path && *raw_path ? raw_path : "/";
             path = UrlDecode(path);
+            ScopeTimer timer(path);
+
             mylog::GetLogger("asynclogger")->Info("get req, uri: %s", path.c_str());
 
             // 根据请求中的内容判断是什么请求
             // 这里是下载请求
+            //  TODO 路由转发
             if (path.find("/download/") != std::string::npos)
             {
                 Download(req, arg);
@@ -109,58 +174,145 @@ namespace storage
             }
         }
 
+
+        struct UploadParams
+        {
+            std::string filename;
+            std::string storageType;
+            size_t contentLength = 0;
+        };
+
+        enum class UploadError
+        {
+            None,
+            MethodNotAllowed,
+            EmptyBody,
+            MissingHeader,
+            InvalidStorageType,
+            InvalidFilename,
+            PayloadTooLarge
+        };
+
+        static bool IsValidFilename(const std::string& filename)
+        {
+            if (filename.empty() || filename == "." || filename == "..")
+                return false;
+            if (filename.find_first_of("/\\") != std::string::npos)
+                return false;
+            if (filename.find('\0') != std::string::npos)
+                return false;
+            return true;
+        }
+
+        static UploadError ValidateUploadRequest(
+            struct evhttp_request* req, UploadParams& params)
+        {
+            if (evhttp_request_get_command(req) != EVHTTP_REQ_POST)
+                return UploadError::MethodNotAllowed;
+
+            struct evbuffer* buf = evhttp_request_get_input_buffer(req);
+            if (!buf)
+                return UploadError::EmptyBody;
+            size_t len = evbuffer_get_length(buf);
+            if (len == 0)
+                return UploadError::EmptyBody;
+
+            constexpr size_t MAX_SIZE = 1024 * 1024;
+            if (len > MAX_SIZE)
+                return UploadError::PayloadTooLarge;
+
+            struct evkeyvalq* headers = evhttp_request_get_input_headers(req);
+            const char* name = evhttp_find_header(headers, "FileName");
+            const char* type = evhttp_find_header(headers, "StorageType");
+            if (!name || !type || !*name || !*type)
+                return UploadError::MissingHeader;
+
+            std::string storage_type(type);
+            if (storage_type != "low" && storage_type != "deep")
+                return UploadError::InvalidStorageType;
+
+            std::string filename;
+            try
+            {
+                filename = base64_decode(std::string(name));
+            }
+            catch (const std::runtime_error&)
+            {
+                return UploadError::InvalidFilename;
+            }
+            catch (const std::out_of_range&)
+            {
+                return UploadError::InvalidFilename;
+            }
+            if (!IsValidFilename(filename))
+                return UploadError::InvalidFilename;
+
+            params.filename = std::move(filename);
+            params.storageType = std::move(storage_type);
+            params.contentLength = len;
+            return UploadError::None;
+        }
+
+        static void ReplyUploadError(struct evhttp_request* req, UploadError error)
+        {
+            int status = HTTP_BADREQUEST;
+            const char* reason = "Bad Request";
+            switch (error)
+            {
+            case UploadError::MethodNotAllowed:
+                status = 405;
+                reason = "Method Not Allowed";
+                evhttp_add_header(evhttp_request_get_output_headers(req), "Allow", "POST");
+                break;
+            case UploadError::PayloadTooLarge:
+                status = 413;
+                reason = "Payload Too Large";
+                break;
+            case UploadError::EmptyBody:
+                reason = "Empty Body";
+                break;
+            case UploadError::MissingHeader:
+                reason = "Missing Upload Header";
+                break;
+            case UploadError::InvalidStorageType:
+                reason = "Invalid Storage Type";
+                break;
+            case UploadError::InvalidFilename:
+                reason = "Invalid Filename";
+                break;
+            case UploadError::None:
+                return;
+            }
+            evhttp_send_reply(req, status, reason, nullptr);
+        }
+
         static void Upload(struct evhttp_request *req, void *arg)
         {
-            mylog::GetLogger("asynclogger")->Info("Upload start");
-            // 约定：请求中包含"low_storage"，说明请求中存在文件数据,并希望普通存储\
-                包含"deep_storage"字段则压缩后存储
-            // 获取请求体内容
-            struct evbuffer *buf = evhttp_request_get_input_buffer(req);
-            if (buf == nullptr)
+            UploadParams params;
+            UploadError error = ValidateUploadRequest(req, params);
+            if (error != UploadError::None)
             {
-                mylog::GetLogger("asynclogger")->Info("evhttp_request_get_input_buffer is empty");
+                ReplyUploadError(req, error);
                 return;
             }
 
-            size_t len = evbuffer_get_length(buf); // 获取请求体的长度
-            mylog::GetLogger("asynclogger")->Info("evbuffer_get_length is %u", len);
-            if (0 == len)
-            {
-                evhttp_send_reply(req, HTTP_BADREQUEST, "file empty", NULL);
-                mylog::GetLogger("asynclogger")->Info("request body is empty");
-                return;
-            }
-            std::string content(len, 0);
-            if (-1 == evbuffer_copyout(buf, (void *)content.c_str(), len))
+            mylog::GetLogger("asynclogger")->Info("Upload start");
+            struct evbuffer* buf = evhttp_request_get_input_buffer(req);
+            const size_t len = params.contentLength;
+            mylog::GetLogger("asynclogger")->Info("evbuffer_get_length is %zu", len);
+            std::string content(len, '\0');
+            if (evbuffer_copyout(buf, content.data(), len) != static_cast<ev_ssize_t>(len))
             {
                 mylog::GetLogger("asynclogger")->Error("evbuffer_copyout error");
-                evhttp_send_reply(req, HTTP_INTERNAL, NULL, NULL);
+                evhttp_send_reply(req, HTTP_INTERNAL, nullptr, nullptr);
                 return;
             }
 
-            // 获取文件名
-            std::string filename = evhttp_find_header(req->input_headers, "FileName");
-            // 解码文件名
-            filename = base64_decode(filename);
-
-            // 获取存储类型，客户端自定义请求头 StorageType
-            std::string storage_type = evhttp_find_header(req->input_headers, "StorageType");
-            // 组织存储路径
-            std::string storage_path;
-            if (storage_type == "low")
-            {
-                storage_path = Config::GetInstance()->GetLowStorageDir();
-            }
-            else if (storage_type == "deep")
-            {
-                storage_path = Config::GetInstance()->GetDeepStorageDir();
-            }
-            else
-            {
-                mylog::GetLogger("asynclogger")->Info("evhttp_send_reply: HTTP_BADREQUEST");
-                evhttp_send_reply(req, HTTP_BADREQUEST, "Illegal storage type", NULL);
-                return;
-            }
+            const std::string& filename = params.filename;
+            const std::string& storage_type = params.storageType;
+            std::string storage_path = storage_type == "low"
+                ? Config::GetInstance()->GetLowStorageDir()
+                : Config::GetInstance()->GetDeepStorageDir();
 
             // 如果不存在就创建low或deep目录
             FileUtil dirCreate(storage_path);
