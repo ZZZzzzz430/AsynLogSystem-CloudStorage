@@ -1,0 +1,9 @@
+/home/zhang/code/Poject/AsynLogSystem/Client/build/unknown-Debug/CMakeFiles/Client.dir
+/home/zhang/code/Poject/AsynLogSystem/Client/build/unknown-Debug/CMakeFiles/edit_cache.dir
+/home/zhang/code/Poject/AsynLogSystem/Client/build/unknown-Debug/CMakeFiles/rebuild_cache.dir
+/home/zhang/code/Poject/AsynLogSystem/Client/build/unknown-Debug/CMakeFiles/list_install_components.dir
+/home/zhang/code/Poject/AsynLogSystem/Client/build/unknown-Debug/CMakeFiles/install.dir
+/home/zhang/code/Poject/AsynLogSystem/Client/build/unknown-Debug/CMakeFiles/install/local.dir
+/home/zhang/code/Poject/AsynLogSystem/Client/build/unknown-Debug/CMakeFiles/install/strip.dir
+/home/zhang/code/Poject/AsynLogSystem/Client/build/unknown-Debug/CMakeFiles/Client_autogen_timestamp_deps.dir
+/home/zhang/code/Poject/AsynLogSystem/Client/build/unknown-Debug/CMakeFiles/Client_autogen.dir
