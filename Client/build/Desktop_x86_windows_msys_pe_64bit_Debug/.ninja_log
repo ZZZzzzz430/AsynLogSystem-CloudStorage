@@ -1,0 +1,22 @@
+# ninja log v6
+3	1160	8142769902299948	Client_autogen/timestamp	401bf08cd6a41251
+3	1160	8142769902299948	Client_autogen/mocs_compilation.cpp	401bf08cd6a41251
+3	1160	8142769902299948	E:/QtProjects/AsynLogSystem-CloudStorage/Client/build/Desktop_x86_windows_msys_pe_64bit_Debug/Client_autogen/timestamp	401bf08cd6a41251
+3	1160	8142769902299948	E:/QtProjects/AsynLogSystem-CloudStorage/Client/build/Desktop_x86_windows_msys_pe_64bit_Debug/Client_autogen/mocs_compilation.cpp	401bf08cd6a41251
+1185	3412	8142769904200838	CMakeFiles/Client.dir/main.cpp.obj	4eb5d5d493bfa700
+1201	3461	8142769904368405	CMakeFiles/Client.dir/ApiClient.cpp.obj	287b70cca7e63ffd
+1171	3602	8142769904067183	CMakeFiles/Client.dir/Client_autogen/mocs_compilation.cpp.obj	e577615cb8f5d20d
+18	479	8142775116895925	Client_autogen/timestamp	401bf08cd6a41251
+18	479	8142775116895925	Client_autogen/mocs_compilation.cpp	401bf08cd6a41251
+18	479	8142775116895925	E:/QtProjects/AsynLogSystem-CloudStorage/Client/build/Desktop_x86_windows_msys_pe_64bit_Debug/Client_autogen/timestamp	401bf08cd6a41251
+18	479	8142775116895925	E:/QtProjects/AsynLogSystem-CloudStorage/Client/build/Desktop_x86_windows_msys_pe_64bit_Debug/Client_autogen/mocs_compilation.cpp	401bf08cd6a41251
+483	1998	8142775117455344	CMakeFiles/Client.dir/main.cpp.obj	4eb5d5d493bfa700
+479	2031	8142775117425352	CMakeFiles/Client.dir/Client_autogen/mocs_compilation.cpp.obj	e577615cb8f5d20d
+20	607	8142775620003142	Client_autogen/timestamp	401bf08cd6a41251
+20	607	8142775620003142	Client_autogen/mocs_compilation.cpp	401bf08cd6a41251
+20	607	8142775620003142	E:/QtProjects/AsynLogSystem-CloudStorage/Client/build/Desktop_x86_windows_msys_pe_64bit_Debug/Client_autogen/timestamp	401bf08cd6a41251
+20	607	8142775620003142	E:/QtProjects/AsynLogSystem-CloudStorage/Client/build/Desktop_x86_windows_msys_pe_64bit_Debug/Client_autogen/mocs_compilation.cpp	401bf08cd6a41251
+611	2197	8142775620632763	CMakeFiles/Client.dir/main.cpp.obj	4eb5d5d493bfa700
+608	2248	8142775620602765	CMakeFiles/Client.dir/Client_autogen/mocs_compilation.cpp.obj	e577615cb8f5d20d
+615	2361	8142775620676251	CMakeFiles/Client.dir/mainwindow.cpp.obj	31ed493209794dd0
+2361	2608	8142775638133169	Client.exe	b2d8dd545f4fc373
