@@ -1,4 +1,3 @@
-
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
 
@@ -7,6 +6,7 @@
 #include <QPushButton>
 #include <QLineEdit>
 #include <QLabel>
+#include "ApiClient.hpp"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
