@@ -8,6 +8,7 @@
 #include <QLabel>
 #include "ApiClient.hpp"
 
+// 保留原主页面及连接测试接线；仅由入口在验证成功后创建并显示。
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -15,13 +16,13 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
-    // 1. 连接测试按钮的 clicked 信号
+    // 1. 连接测试按钮的 clicked 信号；this 为接收对象，销毁时自动断连。
     connect(ui->testConnectionButton,
             &QPushButton::clicked,
             this,
             &MainWindow::onTestConnectionClicked);
 
-    // 2. 连接 ApiClient 的结果信号
+    // 2. 连接 ApiClient 的结果信号；结果只更新主页面，不触发登录成功。
     connect(client_,
             &ApiClient::connectionFinished,
             this,
@@ -30,6 +31,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    // UI 包装对象不是 QObject，需手动删除；控件及 client_ 不在这里重复 delete。
     delete ui;
 }
 

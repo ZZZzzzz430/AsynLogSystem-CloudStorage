@@ -178,7 +178,9 @@ Client_autogen/timestamp: \
 	E:/Qt/6.8.3/mingw_64/include/QtNetwork/qtnetwork-config.h \
 	E:/Qt/6.8.3/mingw_64/include/QtNetwork/qtnetworkexports.h \
 	E:/Qt/6.8.3/mingw_64/include/QtNetwork/qtnetworkglobal.h \
+	E:/Qt/6.8.3/mingw_64/include/QtWidgets/QDialog \
 	E:/Qt/6.8.3/mingw_64/include/QtWidgets/QMainWindow \
+	E:/Qt/6.8.3/mingw_64/include/QtWidgets/qdialog.h \
 	E:/Qt/6.8.3/mingw_64/include/QtWidgets/qmainwindow.h \
 	E:/Qt/6.8.3/mingw_64/include/QtWidgets/qsizepolicy.h \
 	E:/Qt/6.8.3/mingw_64/include/QtWidgets/qtabwidget.h \
@@ -607,6 +609,8 @@ Client_autogen/timestamp: \
 	E:/QtProjects/AsynLogSystem-CloudStorage/Client/build/Desktop_x86_windows_msys_pe_64bit_Debug/CMakeFiles/3.30.5/CMakeRCCompiler.cmake \
 	E:/QtProjects/AsynLogSystem-CloudStorage/Client/build/Desktop_x86_windows_msys_pe_64bit_Debug/CMakeFiles/3.30.5/CMakeSystem.cmake \
 	E:/QtProjects/AsynLogSystem-CloudStorage/Client/build/Desktop_x86_windows_msys_pe_64bit_Debug/Client_autogen/moc_predefs.h \
+	E:/QtProjects/AsynLogSystem-CloudStorage/Client/loginwindow.cpp \
+	E:/QtProjects/AsynLogSystem-CloudStorage/Client/loginwindow.h \
 	E:/QtProjects/AsynLogSystem-CloudStorage/Client/main.cpp \
 	E:/QtProjects/AsynLogSystem-CloudStorage/Client/mainwindow.cpp \
 	E:/QtProjects/AsynLogSystem-CloudStorage/Client/mainwindow.h \

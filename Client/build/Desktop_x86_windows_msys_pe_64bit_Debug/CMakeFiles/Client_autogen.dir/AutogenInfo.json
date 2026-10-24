@@ -352,6 +352,12 @@
 			null
 		],
 		[
+			"E:/QtProjects/AsynLogSystem-CloudStorage/Client/loginwindow.h",
+			"MU",
+			"EWIEGA46WW/moc_loginwindow.cpp",
+			null
+		],
+		[
 			"E:/QtProjects/AsynLogSystem-CloudStorage/Client/mainwindow.h",
 			"MU",
 			"EWIEGA46WW/moc_mainwindow.cpp",
@@ -434,6 +440,11 @@
 	[
 		[
 			"E:/QtProjects/AsynLogSystem-CloudStorage/Client/ApiClient.cpp",
+			"MU",
+			null
+		],
+		[
+			"E:/QtProjects/AsynLogSystem-CloudStorage/Client/loginwindow.cpp",
 			"MU",
 			null
 		],

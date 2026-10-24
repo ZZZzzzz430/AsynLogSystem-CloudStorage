@@ -5,6 +5,7 @@
 #include <QNetworkReply>
 #include <QTimer>
 #include <QDebug>
+#include <memory> // std::make_shared 的直接依赖，不依赖 Qt 头文件间接包含。
 
 // 构造函数
 ApiClient::ApiClient(QObject* parent)

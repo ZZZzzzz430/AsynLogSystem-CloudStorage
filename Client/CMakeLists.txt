@@ -21,6 +21,9 @@ find_package(Qt6 REQUIRED COMPONENTS
 # 项目源文件
 set(PROJECT_SOURCES
     main.cpp
+    # 登录窗口用代码搭建界面；Q_OBJECT 所在头文件交给 AUTOMOC 生成元对象。
+    loginwindow.cpp
+    loginwindow.h
     mainwindow.cpp
     mainwindow.h
     mainwindow.ui
