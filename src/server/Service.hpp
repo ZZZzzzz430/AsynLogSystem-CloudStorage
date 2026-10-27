@@ -152,6 +152,11 @@ namespace storage
             mylog::GetLogger("asynclogger")->Info("get req, uri: %s", path.c_str());
 
             // 根据请求中的内容判断是什么请求
+            // TODO DB06（HTTP 接线练习）：账户/会话核心完成后，再精确挂载
+            // POST /api/v1/auth/login，并把受限 JSON 参数交给 AuthService。
+            // 当前没有这个接口实现；禁止为演示直接回 200 或把数据库 ping 当认证。
+            // GenHandler 的 arg 当前为空；未来要先设计能覆盖回调寿命的上下文，
+            // 不把栈上短寿命仓储传入，也不要让工作线程直接使用 evhttp_request。
             // 这里是下载请求
             //  TODO 路由转发
             if (path.find("/download/") != std::string::npos)

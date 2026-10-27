@@ -1,0 +1,4 @@
+# 本地凭据配置不属于源码；example 文件始终只保存变量名与非秘密默认值。
+.env
+mysql.local.env
+*.local.env

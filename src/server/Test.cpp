@@ -18,6 +18,11 @@ ThreadPool* tp=nullptr;
 mylog::Util::JsonData* g_conf_data;
 void service_module()
 {
+    // TODO DB06（接线练习，当前不执行）：在这个服务线程中按顺序创建
+    // MySqlConfig → MySqlConnection → UserRepository → AuthService → Service。
+    // 配置/连接失败必须明确处理；不要把主线程创建的同一连接随意交给本线程。
+    // 数据库和仓储必须活到 RunModule 返回之后，按逆序析构，不能传入短寿命对象。
+    // 当前只构建 database/ 独立骨架，未连库，也未改变旧服务启动与连接测试行为。
     storage::Service s;
     mylog::GetLogger("asynclogger")->Info("service step in RunModule");
     s.RunModule();
@@ -80,6 +85,8 @@ bool CheckConfigFile(const std::filesystem::path& path) {
 
 int main()
 {
+    // TODO DB03/DB06：启用真实 MySQL 时，按 C API 线程要求在创建工作线程前
+    // 完成进程级库初始化，线程结束后再做对应清理；不要把生命周期塞进某次请求。
     PrintStartupInfo();
 
     // 检查日志配置和存储配置，失败就退出。
