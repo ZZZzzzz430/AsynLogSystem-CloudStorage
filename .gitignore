@@ -1,0 +1,68 @@
+# Build directories (at any level)
+build/
+build-*/
+cmake-build-*/
+
+# CMake / Ninja generated files, including in-source builds
+CMakeFiles/
+CMakeCache.txt
+CMakeCache.txt.prev
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+compile_commands.json
+build.ninja
+rules.ninja
+.ninja_deps
+.ninja_log
+*_autogen/
+
+# Local IDE settings and caches
+.vscode/
+.idea/
+.vs/
+.qtcreator/
+.qtc/
+.qtc_clangd/
+*.pro.user*
+CMakeLists.txt.user*
+CMakeUserPresets.json
+
+# Compiled objects, libraries and executables
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.out
+/src/server/test
+/src/server/gdb_test
+/log_system/logs_code/backlog/ServerBackupLog
+
+# Runtime logs, uploaded files and persistent runtime indexes
+*.log
+logfile/
+low_storage/
+deep_storage/
+storage.data
+storage.dat
+
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Temporary editor and operating system files
+*~
+*.autosave
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+Desktop.ini
