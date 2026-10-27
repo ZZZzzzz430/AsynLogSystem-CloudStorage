@@ -2,57 +2,127 @@
 <ui version="4.0">
  <class>MainWindow</class>
  <widget class="QMainWindow" name="MainWindow">
-  <property name="geometry">
-   <rect>
-    <x>0</x>
-    <y>0</y>
-    <width>800</width>
-    <height>600</height>
-   </rect>
-  </property>
-  <property name="windowTitle">
-   <string>MainWindow</string>
-  </property>
+  <property name="geometry"><rect><x>0</x><y>0</y><width>1100</width><height>780</height></rect></property>
+  <property name="minimumSize"><size><width>960</width><height>720</height></size></property>
+  <property name="windowTitle"><string>云盘 · 我的文件</string></property>
   <widget class="QWidget" name="centralwidget">
-   <widget class="QWidget" name="verticalLayoutWidget">
-    <property name="geometry">
-     <rect>
-      <x>89</x>
-      <y>110</y>
-      <width>291</width>
-      <height>101</height>
-     </rect>
-    </property>
-    <layout class="QVBoxLayout" name="verticalLayout">
-     <item>
-      <widget class="QLineEdit" name="serverUrlEdit"/>
-     </item>
-     <item>
-      <widget class="QPushButton" name="testConnectionButton">
-       <property name="text">
-        <string>测试</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QLabel" name="connectionStatusLabel">
-       <property name="text">
-        <string>TextLabel</string>
-       </property>
-      </widget>
-     </item>
-    </layout>
-   </widget>
-  </widget>
-  <widget class="QMenuBar" name="menubar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>800</width>
-     <height>24</height>
-    </rect>
-   </property>
+   <!-- 根布局左右分区；不要使用绝对坐标，最小窗口尺寸由布局共同约束。 -->
+   <layout class="QHBoxLayout" name="rootLayout">
+    <property name="spacing"><number>0</number></property>
+    <property name="leftMargin"><number>0</number></property>
+    <property name="topMargin"><number>0</number></property>
+    <property name="rightMargin"><number>0</number></property>
+    <property name="bottomMargin"><number>0</number></property>
+    <item>
+     <widget class="QWidget" name="sideBar">
+      <!-- 左侧只保留已有的文件入口，不添加尚无业务支持的收藏/容量等假数据。 -->
+      <property name="minimumSize"><size><width>184</width><height>0</height></size></property>
+      <property name="maximumSize"><size><width>184</width><height>16777215</height></size></property>
+      <layout class="QVBoxLayout" name="sidebarLayout">
+       <property name="spacing"><number>18</number></property>
+       <property name="leftMargin"><number>18</number></property>
+       <property name="topMargin"><number>22</number></property>
+       <property name="rightMargin"><number>18</number></property>
+       <property name="bottomMargin"><number>24</number></property>
+       <item><layout class="QHBoxLayout" name="brandLayout">
+        <item><widget class="QLabel" name="sidebarLogo"><property name="text"><string/></property></widget></item>
+        <item><widget class="QLabel" name="brandName"><property name="text"><string>云盘</string></property></widget></item>
+        <item><spacer name="brandSpacer"><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>10</width><height>10</height></size></property></spacer></item>
+       </layout></item>
+       <item><widget class="QPushButton" name="filesButton"><property name="text"><string>  我的文件</string></property></widget></item>
+       <item><widget class="QLabel" name="sidebarDescription">
+        <property name="text"><string>选择本地文件
+开始你的云端存储之旅</string></property>
+        <property name="wordWrap"><bool>true</bool></property>
+       </widget></item>
+       <item><spacer name="sidebarSpacer"><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>10</width><height>40</height></size></property></spacer></item>
+       <item><widget class="QLabel" name="serverCaption"><property name="text"><string>当前服务器</string></property></widget></item>
+       <item><widget class="QLabel" name="serverHintLabel"><property name="text"><string>尚未设置</string></property><property name="wordWrap"><bool>true</bool></property></widget></item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QWidget" name="workspace">
+      <!-- 右侧工作区：标题、操作栏、本地候选文件、下载入口、原连接测试。 -->
+      <layout class="QVBoxLayout" name="workspaceLayout">
+       <property name="spacing"><number>16</number></property>
+       <property name="leftMargin"><number>28</number></property>
+       <property name="topMargin"><number>26</number></property>
+       <property name="rightMargin"><number>28</number></property>
+       <property name="bottomMargin"><number>22</number></property>
+       <item><widget class="QLabel" name="pageTitle"><property name="text"><string>我的文件</string></property></widget></item>
+       <item><widget class="QLabel" name="pageSubtitle"><property name="text"><string>管理文件，让重要内容随手可达。</string></property></widget></item>
+       <item><layout class="QHBoxLayout" name="toolbarLayout">
+        <property name="spacing"><number>10</number></property>
+        <item><widget class="QPushButton" name="selectFileButton"><property name="text"><string>选择文件</string></property></widget></item>
+        <item><widget class="QPushButton" name="uploadButton"><property name="text"><string>上传文件</string></property></widget></item>
+        <item><spacer name="toolbarSpacer"><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>10</height></size></property></spacer></item>
+        <item><widget class="QPushButton" name="refreshButton"><property name="text"><string>刷新</string></property></widget></item>
+       </layout></item>
+       <item>
+        <widget class="QFrame" name="workspaceCard">
+         <!-- filesStack 第 0 页为空态，第 1 页只显示用户选中的本地候选文件。 -->
+         <layout class="QVBoxLayout" name="filesCardLayout">
+          <property name="leftMargin"><number>20</number></property>
+          <property name="topMargin"><number>18</number></property>
+          <property name="rightMargin"><number>20</number></property>
+          <property name="bottomMargin"><number>18</number></property>
+          <item><widget class="QLabel" name="localFileTitle"><property name="text"><string>本地待上传文件</string></property></widget></item>
+          <item>
+           <widget class="QStackedWidget" name="filesStack">
+            <property name="minimumSize"><size><width>0</width><height>190</height></size></property>
+            <widget class="QWidget" name="emptyPage">
+             <layout class="QVBoxLayout" name="emptyLayout">
+              <property name="spacing"><number>8</number></property>
+              <item><spacer name="emptyTopSpacer"><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>10</width><height>12</height></size></property></spacer></item>
+              <item><widget class="QLabel" name="emptyIcon"><property name="text"><string/></property><property name="alignment"><set>Qt::AlignCenter</set></property></widget></item>
+              <item><widget class="QLabel" name="emptyTitle"><property name="text"><string>还没有选择文件</string></property><property name="alignment"><set>Qt::AlignCenter</set></property></widget></item>
+              <item><widget class="QLabel" name="emptyDescription"><property name="text"><string>选择一个本地文件，准备上传至云盘。</string></property><property name="alignment"><set>Qt::AlignCenter</set></property></widget></item>
+              <item alignment="Qt::AlignHCenter"><widget class="QPushButton" name="emptySelectButton"><property name="text"><string>选择文件</string></property></widget></item>
+              <item><spacer name="emptyBottomSpacer"><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>10</width><height>12</height></size></property></spacer></item>
+             </layout>
+            </widget>
+            <widget class="QWidget" name="selectedFilesPage">
+             <layout class="QVBoxLayout" name="selectedFilesLayout">
+              <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>8</number></property><property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
+              <item><widget class="QTableWidget" name="fileTable">
+               <property name="showGrid"><bool>false</bool></property>
+               <column><property name="text"><string>文件名称</string></property></column>
+               <column><property name="text"><string>大小</string></property></column>
+               <column><property name="text"><string>状态</string></property></column>
+              </widget></item>
+             </layout>
+            </widget>
+           </widget>
+          </item>
+          <item><widget class="QProgressBar" name="transferProgressBar"><property name="value"><number>0</number></property></widget></item>
+          <item><widget class="QLabel" name="transferStatusLabel"><property name="text"><string>尚无传输任务</string></property><property name="wordWrap"><bool>true</bool></property></widget></item>
+         </layout>
+        </widget>
+       </item>
+       <!-- 旧协议按已知远端名下载，真实 URL 编码和磁盘写入由用户补齐。 -->
+       <item><layout class="QVBoxLayout" name="downloadLayout">
+        <property name="spacing"><number>7</number></property>
+        <item><widget class="QLabel" name="downloadTitle"><property name="text"><string>按文件名下载</string></property></widget></item>
+        <item><layout class="QHBoxLayout" name="downloadRow">
+         <item><widget class="QLineEdit" name="remoteNameEdit"><property name="placeholderText"><string>输入已知的远端文件名，例如：学习笔记.txt</string></property></widget></item>
+         <item><widget class="QPushButton" name="downloadButton"><property name="text"><string>下载文件</string></property></widget></item>
+        </layout></item>
+       </layout></item>
+       <!-- 保留三个原 objectName，现有的连接测试信号槽继续使用这些控件。 -->
+       <item><layout class="QVBoxLayout" name="connectionLayout">
+        <property name="spacing"><number>7</number></property>
+        <item><widget class="QLabel" name="connectionTitle"><property name="text"><string>服务器连接</string></property></widget></item>
+        <item><layout class="QHBoxLayout" name="connectionRow">
+         <item><widget class="QLineEdit" name="serverUrlEdit"><property name="placeholderText"><string>http://127.0.0.1:8081</string></property></widget></item>
+         <item><widget class="QPushButton" name="testConnectionButton"><property name="text"><string>测试连接</string></property></widget></item>
+        </layout></item>
+        <item><widget class="QLabel" name="connectionStatusLabel"><property name="text"><string>尚未进行连接测试</string></property><property name="wordWrap"><bool>true</bool></property></widget></item>
+       </layout></item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>

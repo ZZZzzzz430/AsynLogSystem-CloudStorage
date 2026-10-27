@@ -762,6 +762,7 @@ E:/QtProjects/AsynLogSystem-CloudStorage/Client/mainwindow.cpp
 E:/QtProjects/AsynLogSystem-CloudStorage/Client/loginwindow.h
  mmc:Q_OBJECT
  mdp:E:/Qt/6.8.3/mingw_64/include/QtCore/QString
+ mdp:E:/Qt/6.8.3/mingw_64/include/QtCore/QUrl
  mdp:E:/Qt/6.8.3/mingw_64/include/QtCore/q20functional.h
  mdp:E:/Qt/6.8.3/mingw_64/include/QtCore/q20iterator.h
  mdp:E:/Qt/6.8.3/mingw_64/include/QtCore/q20memory.h
@@ -877,6 +878,7 @@ E:/QtProjects/AsynLogSystem-CloudStorage/Client/loginwindow.h
  mdp:E:/Qt/6.8.3/mingw_64/include/QtCore/qtversionchecks.h
  mdp:E:/Qt/6.8.3/mingw_64/include/QtCore/qtypeinfo.h
  mdp:E:/Qt/6.8.3/mingw_64/include/QtCore/qtypes.h
+ mdp:E:/Qt/6.8.3/mingw_64/include/QtCore/qurl.h
  mdp:E:/Qt/6.8.3/mingw_64/include/QtCore/qutf8stringview.h
  mdp:E:/Qt/6.8.3/mingw_64/include/QtCore/qvariant.h
  mdp:E:/Qt/6.8.3/mingw_64/include/QtCore/qvarlengtharray.h
@@ -1123,4 +1125,6 @@ E:/QtProjects/AsynLogSystem-CloudStorage/Client/loginwindow.h
  mdp:E:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/wchar.h
  mdp:E:/QtProjects/AsynLogSystem-CloudStorage/Client/build/Desktop_x86_windows_msys_pe_64bit_Debug/Client_autogen/moc_predefs.h
  mdp:E:/QtProjects/AsynLogSystem-CloudStorage/Client/loginwindow.h
+E:/QtProjects/AsynLogSystem-CloudStorage/Client/clienttheme.h
 E:/QtProjects/AsynLogSystem-CloudStorage/Client/loginwindow.cpp
+E:/QtProjects/AsynLogSystem-CloudStorage/Client/clienttheme.cpp

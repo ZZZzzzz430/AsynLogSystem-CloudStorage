@@ -24,6 +24,9 @@ set(PROJECT_SOURCES
     # 登录窗口用代码搭建界面；Q_OBJECT 所在头文件交给 AUTOMOC 生成元对象。
     loginwindow.cpp
     loginwindow.h
+    # 共用配色与 QPainter 图标，不新增资源包或 Qt 模块依赖。
+    clienttheme.cpp
+    clienttheme.h
     mainwindow.cpp
     mainwindow.h
     mainwindow.ui

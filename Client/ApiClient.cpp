@@ -7,6 +7,39 @@
 #include <QDebug>
 #include <memory> // std::make_shared 的直接依赖，不依赖 Qt 头文件间接包含。
 
+// TODO E01（用户练习）：按实际服务端认证契约补齐这里。
+// 1. 创建真实请求；2. 管理 reply/超时/取消；3. 检查 HTTP 和业务身份结果；
+// 4. 只在身份确认通过时 emit loginFinished(true, ...)，否则给出失败原因。
+// 目前不拼接假 /login，不写死账号，也不使用定时器默认放行。
+// TODO DB06：服务端的 MySQL 仓储和 /api/v1/auth/login 真正完成后再实现 HTTP。
+// Qt 客户端只调用服务接口，不链接 MySQL、不持有 STORAGE_DB_* 数据库凭据。
+void ApiClient::login(const QUrl &serverUrl, const QString &account, const QString &password)
+{
+    Q_UNUSED(serverUrl)
+    Q_UNUSED(account)
+    Q_UNUSED(password)
+    emit loginFinished(false, tr("登录服务暂不可用，请联系管理员。"));
+}
+
+// TODO E04（用户练习）：实现旧协议 low 上传；FileName 使用文件名 UTF-8 的 Base64，
+// 将 QFile 保留到 finished，等待服务端最终确认后再发送成功信号。
+void ApiClient::uploadFile(const QUrl &serverUrl, const QString &localPath)
+{
+    Q_UNUSED(serverUrl)
+    Q_UNUSED(localPath)
+    emit uploadFinished(false, tr("上传服务暂不可用。"));
+}
+
+// TODO E05（用户练习）：按已知远端文件名编码 URL，流式写入临时输出；
+// 检查状态、写入错误和完整性，全部成功才 commit，失败不留下正式目标文件。
+void ApiClient::downloadFile(const QUrl &serverUrl, const QString &remoteName, const QString &targetPath)
+{
+    Q_UNUSED(serverUrl)
+    Q_UNUSED(remoteName)
+    Q_UNUSED(targetPath)
+    emit downloadFinished(false, tr("下载服务暂不可用。"));
+}
+
 // 构造函数
 ApiClient::ApiClient(QObject* parent)
     : QObject(parent)

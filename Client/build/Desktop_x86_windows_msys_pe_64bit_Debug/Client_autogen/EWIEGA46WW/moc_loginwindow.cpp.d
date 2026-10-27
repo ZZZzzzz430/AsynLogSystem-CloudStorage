@@ -1,6 +1,7 @@
 E:/QtProjects/AsynLogSystem-CloudStorage/Client/build/Desktop_x86_windows_msys_pe_64bit_Debug/Client_autogen/EWIEGA46WW/moc_loginwindow.cpp: E:/QtProjects/AsynLogSystem-CloudStorage/Client/loginwindow.h \
   E:/QtProjects/AsynLogSystem-CloudStorage/Client/build/Desktop_x86_windows_msys_pe_64bit_Debug/Client_autogen/moc_predefs.h \
   E:/Qt/6.8.3/mingw_64/include/QtCore/QString \
+  E:/Qt/6.8.3/mingw_64/include/QtCore/QUrl \
   E:/Qt/6.8.3/mingw_64/include/QtCore/q20functional.h \
   E:/Qt/6.8.3/mingw_64/include/QtCore/q20iterator.h \
   E:/Qt/6.8.3/mingw_64/include/QtCore/q20memory.h \
@@ -116,6 +117,7 @@ E:/QtProjects/AsynLogSystem-CloudStorage/Client/build/Desktop_x86_windows_msys_p
   E:/Qt/6.8.3/mingw_64/include/QtCore/qtversionchecks.h \
   E:/Qt/6.8.3/mingw_64/include/QtCore/qtypeinfo.h \
   E:/Qt/6.8.3/mingw_64/include/QtCore/qtypes.h \
+  E:/Qt/6.8.3/mingw_64/include/QtCore/qurl.h \
   E:/Qt/6.8.3/mingw_64/include/QtCore/qutf8stringview.h \
   E:/Qt/6.8.3/mingw_64/include/QtCore/qvariant.h \
   E:/Qt/6.8.3/mingw_64/include/QtCore/qvarlengtharray.h \

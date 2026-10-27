@@ -609,6 +609,8 @@ Client_autogen/timestamp: \
 	E:/QtProjects/AsynLogSystem-CloudStorage/Client/build/Desktop_x86_windows_msys_pe_64bit_Debug/CMakeFiles/3.30.5/CMakeRCCompiler.cmake \
 	E:/QtProjects/AsynLogSystem-CloudStorage/Client/build/Desktop_x86_windows_msys_pe_64bit_Debug/CMakeFiles/3.30.5/CMakeSystem.cmake \
 	E:/QtProjects/AsynLogSystem-CloudStorage/Client/build/Desktop_x86_windows_msys_pe_64bit_Debug/Client_autogen/moc_predefs.h \
+	E:/QtProjects/AsynLogSystem-CloudStorage/Client/clienttheme.cpp \
+	E:/QtProjects/AsynLogSystem-CloudStorage/Client/clienttheme.h \
 	E:/QtProjects/AsynLogSystem-CloudStorage/Client/loginwindow.cpp \
 	E:/QtProjects/AsynLogSystem-CloudStorage/Client/loginwindow.h \
 	E:/QtProjects/AsynLogSystem-CloudStorage/Client/main.cpp \

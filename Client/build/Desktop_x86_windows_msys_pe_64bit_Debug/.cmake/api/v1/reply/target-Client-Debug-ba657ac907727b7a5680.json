@@ -56,7 +56,7 @@
 			{
 				"command" : 3,
 				"file" : 1,
-				"line" : 33,
+				"line" : 39,
 				"parent" : 0
 			},
 			{
@@ -80,13 +80,13 @@
 			{
 				"command" : 4,
 				"file" : 1,
-				"line" : 55,
+				"line" : 61,
 				"parent" : 0
 			},
 			{
 				"command" : 5,
 				"file" : 1,
-				"line" : 39,
+				"line" : 45,
 				"parent" : 0
 			},
 			{
@@ -439,7 +439,9 @@
 				0,
 				1,
 				2,
-				6
+				4,
+				6,
+				10
 			]
 		}
 	],
@@ -573,7 +575,9 @@
 				0,
 				1,
 				2,
-				6
+				4,
+				6,
+				10
 			]
 		},
 		{
@@ -582,28 +586,30 @@
 			[
 				3,
 				5,
-				7
+				7,
+				9,
+				11
 			]
 		},
 		{
 			"name" : "Forms",
 			"sourceIndexes" : 
 			[
-				4
+				8
 			]
 		},
 		{
 			"name" : "",
 			"sourceIndexes" : 
 			[
-				8
+				12
 			]
 		},
 		{
 			"name" : "CMake Rules",
 			"sourceIndexes" : 
 			[
-				9
+				13
 			]
 		}
 	],
@@ -621,6 +627,28 @@
 			"compileGroupIndex" : 0,
 			"path" : "main.cpp",
 			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 4,
+			"compileGroupIndex" : 0,
+			"path" : "loginwindow.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 4,
+			"path" : "loginwindow.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 4,
+			"compileGroupIndex" : 0,
+			"path" : "clienttheme.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 4,
+			"path" : "clienttheme.h",
+			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,

@@ -63,5 +63,6 @@
         "typeinfo": "cpp",
         "bitset": "cpp",
         "regex": "cpp"
-    }
+    },
+    "cmake.sourceDirectory": "E:/QtProjects/AsynLogSystem-CloudStorage/Client"
 }
