@@ -21,13 +21,14 @@ struct MySqlConfig {
     unsigned int connectTimeoutSeconds = 3;
     unsigned int readTimeoutSeconds = 3;
     unsigned int writeTimeoutSeconds = 3;
-    // 跨机器连接时由练习明确配置证书验证，不能在连接失败后偷偷降低要求。
+    // true: VERIFY_IDENTITY，需要 CA 且 host 匹配证书。
+    // false: REQUIRED，仍强制 TLS 加密；仅建议本机练习显式选择，不验证服务器身份。
     bool requireVerifiedTls = true;
     std::string tlsCaFile;
 };
 
-// TODO DB01：读取约定的环境变量并校验。失败时 out 保持空凭据，不能默认使用 root。
-// 当前只有函数框架，不读取本机保存的密码，也不自动加载 .env 文件。
+// 读取约定的环境变量并校验。失败时 out 保持空凭据，不自动加载 .env 文件。
+// 端口 1..65535，超时 1..3600 秒；TLS 标志只接受 0 或 1。
 [[nodiscard]] DbStatus loadMySqlConfigFromEnvironment(MySqlConfig &out);
 
 // 一个实例独占一个数据库连接；创建、使用、销毁均放在同一个服务端执行线程。
@@ -36,6 +37,7 @@ class MySqlConnection {
 public:
     // 构造不连库，便于区分“创建 C++ 对象”和“真实网络连接成功”。
     MySqlConnection() noexcept = default;
+    
     // 只做资源回收；析构不能抛异常，也不能在这里做重连。
     ~MySqlConnection() noexcept;
     MySqlConnection(const MySqlConnection &) = delete;
@@ -43,11 +45,12 @@ public:
     MySqlConnection(MySqlConnection &&) = delete;
     MySqlConnection &operator=(MySqlConnection &&) = delete;
 
-    // TODO DB03：mysql_init/options/real_connect/字符集；全部通过后才发布句柄。
-    // 当前返回 NotImplemented，不创建 socket、不尝试连接、不修改数据库。
+    // 真实 TCP 连接；全部设置成功后才发布句柄，不自动建库建表。
+    // 调用方在启动工作线程前执行 mysql_library_init；所有线程退出后 library_end。
+    // 工作线程内首次 mysql_init 会初始化线程状态，退出前须调用 mysql_thread_end。
     [[nodiscard]] DbStatus open(const MySqlConfig &config);
 
-    // TODO DB03：真实探活；未连接与探活失败要区分，不自动重连掩盖事务状态丢失。
+    // 真实探活；不自动重连，失败时关闭失效连接并返回 DatabaseError。
     [[nodiscard]] DbStatus ping();
 
     // 已给出的生命周期接线：回收自己拥有的句柄，可重复调用。
