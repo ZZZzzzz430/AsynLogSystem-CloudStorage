@@ -1,5 +1,6 @@
 #pragma once
 #include "DataManager.hpp"
+#include "auth/AuthHttp.hpp"
 
 #include <sys/queue.h>
 #include <event.h>
@@ -74,7 +75,7 @@ namespace storage
     class Service
     {
     public:
-        Service()
+        explicit Service(auth::AuthService &authService) : auth_(authService)
         {
 #ifdef DEBUG_LOG
             mylog::GetLogger("asynclogger")->Debug("Service start(Construct)");
@@ -102,10 +103,12 @@ namespace storage
             sin.sin_port = htons(server_port_);
             // http 服务器,创建evhttp上下文
             evhttp *httpd = evhttp_new(base);
+            if (!httpd) { event_base_free(base); return false; }
             // 绑定端口和ip
             if (evhttp_bind_socket(httpd, "0.0.0.0", server_port_) != 0)
             {
-                mylog::GetLogger("asynclogger")->Fatal("evhttp_bind_socket failed!");
+                mylog::GetLogger("asynclogger")->Error("evhttp_bind_socket failed!");
+                evhttp_free(httpd); event_base_free(base);
                 return false;
             }
             // 设定回调函数
@@ -115,7 +118,10 @@ namespace storage
                 EVHTTP_REQ_GET | EVHTTP_REQ_POST | EVHTTP_REQ_HEAD |
                 EVHTTP_REQ_PUT | EVHTTP_REQ_DELETE | EVHTTP_REQ_OPTIONS |
                 EVHTTP_REQ_TRACE | EVHTTP_REQ_CONNECT | EVHTTP_REQ_PATCH);
-            evhttp_set_gencb(httpd, GenHandler, NULL);
+            evhttp_set_max_headers_size(httpd, 16384);
+            evhttp_set_max_body_size(httpd, 1024 * 1024);
+            evhttp_set_timeout(httpd, 30);
+            evhttp_set_gencb(httpd, GenHandler, this);
 
             if (base)
             {
@@ -127,14 +133,15 @@ namespace storage
                     mylog::GetLogger("asynclogger")->Debug("event_base_dispatch err");
                 }
             }
-            if (base)
-                event_base_free(base);
             if (httpd)
                 evhttp_free(httpd);
+            if (base)
+                event_base_free(base);
             return true;
         }
 
     private:
+        auth::AuthService &auth_;
         uint16_t server_port_;
         std::string server_ip_;
         std::string download_prefix_;
@@ -151,12 +158,23 @@ namespace storage
 
             mylog::GetLogger("asynclogger")->Info("get req, uri: %s", path.c_str());
 
-            // 根据请求中的内容判断是什么请求
-            // TODO DB06（HTTP 接线练习）：账户/会话核心完成后，再精确挂载
-            // POST /api/v1/auth/login，并把受限 JSON 参数交给 AuthService。
-            // 当前没有这个接口实现；禁止为演示直接回 200 或把数据库 ping 当认证。
-            // GenHandler 的 arg 当前为空；未来要先设计能覆盖回调寿命的上下文，
-            // 不把栈上短寿命仓储传入，也不要让工作线程直接使用 evhttp_request。
+            auto &self = *static_cast<Service *>(arg);
+            if (auth::AuthHttp::handle(req, path, self.auth_)) return;
+            // Legacy storage routes require a valid session as well. File ownership
+            // remains in the legacy metadata format and is not introduced here.
+            if (path == "/health") {
+                Json::Value body; body["ok"] = true;
+                auth::AuthHttp::reply(req, 200, body); return;
+            }
+            {
+                db::UserRecord user;
+                auto code = self.auth_.authenticate(auth::AuthHttp::bearer(req), user);
+                if (code != auth::AuthCode::Authenticated) {
+                    auth::AuthHttp::failure(req, code == auth::AuthCode::Unavailable ? 503 : 401,
+                                           "Authentication required");
+                    return;
+                }
+            }
             // 这里是下载请求
             //  TODO 路由转发
             if (path.find("/download/") != std::string::npos)

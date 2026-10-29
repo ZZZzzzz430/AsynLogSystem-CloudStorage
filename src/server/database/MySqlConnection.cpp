@@ -147,6 +147,10 @@ DbStatus MySqlConnection::open(const MySqlConfig &config)
     if (mysql_set_character_set(local.get(), "utf8mb4") != 0)
         return databaseError(local.get(), "mysql_set_character_set");
 
+    // FROM_UNIXTIME and persisted DATETIME values always use UTC.
+    if (mysql_query(local.get(), "SET time_zone = '+00:00'"))
+        return databaseError(local.get(), "set UTC timezone");
+
     handle_ = local.release();
     return {DbCode::Ok, {}};
 }

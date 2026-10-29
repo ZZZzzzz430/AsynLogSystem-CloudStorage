@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 project(StorageMySqlScaffold LANGUAGES CXX)
+find_package(OpenSSL REQUIRED)
 
 # 这是服务端独立练习目标，不给 Client 链接 MySQL，不接管原 Linux 服务构建。
 set(CMAKE_CXX_STANDARD 17)
@@ -24,11 +25,12 @@ endif()
 
 add_library(storage_mysql_scaffold STATIC
     MySqlConnection.cpp MySqlConnection.hpp DbStatus.hpp
-    UserRepository.cpp UserRepository.hpp
+    UserRepository.cpp UserRepository.hpp SessionRepository.cpp SessionRepository.hpp Statement.hpp
+    ../auth/Crypto.cpp ../auth/Crypto.hpp
     ../auth/AuthService.cpp ../auth/AuthService.hpp)
 target_include_directories(storage_mysql_scaffold PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_include_directories(storage_mysql_scaffold PRIVATE "${MYSQL_INCLUDE_DIR}")
-target_link_libraries(storage_mysql_scaffold PUBLIC "${MYSQL_CLIENT_LIBRARY}")
+target_link_libraries(storage_mysql_scaffold PUBLIC "${MYSQL_CLIENT_LIBRARY}" OpenSSL::Crypto)
 if(WIN32)
     target_link_libraries(storage_mysql_scaffold PUBLIC ws2_32 secur32)
 endif()
@@ -64,3 +66,19 @@ foreach(target IN LISTS storage_mysql_targets)
         target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -finput-charset=UTF-8)
     endif()
 endforeach()
+
+add_executable(storage_create_user create_user.cpp)
+target_include_directories(storage_create_user PRIVATE "${MYSQL_INCLUDE_DIR}")
+target_link_libraries(storage_create_user PRIVATE storage_mysql_scaffold)
+add_executable(mysql_integration_tests integration_tests.cpp)
+target_include_directories(mysql_integration_tests PRIVATE "${MYSQL_INCLUDE_DIR}")
+target_link_libraries(mysql_integration_tests PRIVATE storage_mysql_scaffold)
+# Intentionally manual: integration tests require an explicitly selected isolated database.
+add_executable(mysql_http_fixture http_fixture.cpp)
+target_include_directories(mysql_http_fixture PRIVATE "${MYSQL_INCLUDE_DIR}")
+target_link_libraries(mysql_http_fixture PRIVATE storage_mysql_scaffold)
+if(BUILD_TESTING)
+    add_executable(storage_crypto_tests crypto_tests.cpp)
+    target_link_libraries(storage_crypto_tests PRIVATE storage_mysql_scaffold)
+    add_test(NAME password_hash_and_token_crypto COMMAND storage_crypto_tests)
+endif()

@@ -6,6 +6,7 @@
 #define DEBUG_LOG
 #include "Service.hpp"
 #include <thread>
+#include <mysql.h>
 #include <filesystem>
 #include <iostream>
 #include <system_error>
@@ -18,14 +19,19 @@ ThreadPool* tp=nullptr;
 mylog::Util::JsonData* g_conf_data;
 void service_module()
 {
-    // TODO DB06（接线练习，当前不执行）：在这个服务线程中按顺序创建
-    // MySqlConfig → MySqlConnection → UserRepository → AuthService → Service。
-    // 配置/连接失败必须明确处理；不要把主线程创建的同一连接随意交给本线程。
-    // 数据库和仓储必须活到 RunModule 返回之后，按逆序析构，不能传入短寿命对象。
-    // 当前只构建 database/ 独立骨架，未连库，也未改变旧服务启动与连接测试行为。
-    storage::Service s;
+    storage::db::MySqlConfig config;
+    auto status = storage::db::loadMySqlConfigFromEnvironment(config);
+    if (!status.ok()) throw std::runtime_error(status.message);
+    storage::db::MySqlConnection connection;
+    status = connection.open(config);
+    config.password.clear();
+    if (!status.ok()) throw std::runtime_error(status.message);
+    storage::db::UserRepository users(connection);
+    storage::db::SessionRepository sessions(connection);
+    storage::auth::AuthService auth(users, sessions);
+    storage::Service s(auth);
     mylog::GetLogger("asynclogger")->Info("service step in RunModule");
-    s.RunModule();
+    if (!s.RunModule()) throw std::runtime_error("HTTP service failed");
 }
 
 void log_system_module_init()
@@ -85,8 +91,9 @@ bool CheckConfigFile(const std::filesystem::path& path) {
 
 int main()
 {
-    // TODO DB03/DB06：启用真实 MySQL 时，按 C API 线程要求在创建工作线程前
-    // 完成进程级库初始化，线程结束后再做对应清理；不要把生命周期塞进某次请求。
+
+    if (mysql_library_init(0, nullptr, nullptr) != 0) return 1;
+    struct MySqlLibraryGuard { ~MySqlLibraryGuard() { mysql_library_end(); } } mysqlGuard;
     PrintStartupInfo();
 
     // 检查日志配置和存储配置，失败就退出。
@@ -106,9 +113,17 @@ int main()
 
     data_ = new storage::DataManager();
 
-    thread t1(service_module);
-
+    bool failed = false;
+    thread t1([&failed] {
+        try { service_module(); }
+        catch (const std::exception &error) {
+            std::cerr << "[database/service] " << error.what() << '\n'; failed = true;
+        }
+        catch (...) { std::cerr << "[database/service] startup failed\n"; failed = true; }
+        mysql_thread_end();
+    });
     t1.join();
     delete(tp);
-    return 0;
+    delete(data_);
+    return failed ? 1 : 0;
 }

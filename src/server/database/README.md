@@ -1,87 +1,77 @@
-# 服务端 MySQL 连接
+# Linux MySQL 与真实认证
 
-2026-10-28：已实现 DB01 配置读取和 DB03 连接/探活。用户查询、插入、认证、会话及 HTTP 路由仍为 TODO，不能把连接成功当作用户登录成功。
+当前服务端使用 **MySQL C API**，不是 Connector/C++。`libmysqlcppconn-dev` 无法替代 C API SDK；CMake 直接找头文件/库，不依赖 `mysql_config`。Qt 只通过 HTTP 连接服务端，不接触数据库凭据。
 
-## 实现入口
+## 构建与初始化
 
-- `MySqlConnection.cpp`：环境变量严格解析、配置校验、超时、TCP、utf8mb4、TLS、真实连接及探活；临时句柄使用 RAII，失败不会留下已连接状态。
-- `MySqlConnection.hpp`：配置和连接接口；一个连接只能在其所属服务线程使用。
-- `connection_probe.cpp`：可独立运行的完整调用示例，读取配置 → 初始化客户端库 → open → ping → 释放连接 → 清理客户端库。不执行 SQL。
-- `connection_tests.cpp`：配置边界、凭据清理、未连接状态和可选的关闭端口测试。
-- `mysql.env.example`：环境变量说明，不自动加载，不填写真实密码。
+在仓库根目录：
 
-连接错误只返回操作名和 MySQL 数字错误码，不返回可能包含用户输入的原始错误文本。常见错误：1045 是账号/密码或账号来源不匹配，1049 是数据库不存在，1044 是数据库权限不足，2003 是地址/端口/服务不可达，2026 是 TLS 问题。
-
-## Windows 构建
-
-在仓库根目录用 PowerShell 执行。以下为本机已存在的工具和 SDK 路径，换机器时按实际安装位置调整。
-
-```powershell
-$env:PATH = 'E:\Qt\Tools\mingw1310_64\bin;E:\Qt\Tools\Ninja;C:\Program Files\MySQL\MySQL Server 8.0\lib;C:\Program Files\MySQL\MySQL Server 8.0\bin;' + $env:PATH
-
-& 'E:\Qt\Tools\CMake_64\bin\cmake.exe' `
-  -S src/server/database -B build/mysql-scaffold -G Ninja `
-  '-DCMAKE_BUILD_TYPE=Debug' '-DBUILD_TESTING=ON' `
-  '-DMYSQL_ROOT=C:/Program Files/MySQL/MySQL Server 8.0' `
-  '-DCMAKE_CXX_COMPILER=E:/Qt/Tools/mingw1310_64/bin/g++.exe' `
-  '-DCMAKE_MAKE_PROGRAM=E:/Qt/Tools/Ninja/ninja.exe'
-
-& 'E:\Qt\Tools\CMake_64\bin\cmake.exe' --build build/mysql-scaffold --parallel 4
-& 'E:\Qt\Tools\CMake_64\bin\ctest.exe' --test-dir build/mysql-scaffold --output-on-failure
+```bash
+sudo apt install -y libmysqlclient-dev libssl-dev
+cmake -S src/server/database -B build/mysql -DBUILD_TESTING=ON
+cmake --build build/mysql --parallel 4
+ctest --test-dir build/mysql --output-on-failure
+make -C src/server test
+cmake -S Client -B build/client -DBUILD_TESTING=ON
+cmake --build build/client --parallel 4
 ```
 
-CTest 默认只测试配置和状态，不连接数据库。`mysql_sdk_probe.exe` 也只检查 SDK；真实连接请运行下面的 `mysql_connection_probe.exe`。
+`mysql_configuration_and_state` 与 `password_hash_and_token_crypto` 不连接数据库。真实连接及 SQL 验证必须执行后面的命令。
 
-## 本机连接验证
+在**本机交互终端**执行：
 
-在上述终端中执行，库名和专用账号改成你在 Workbench 中创建的实际值。此例仅用于服务端程序与 MySQL 同在 Windows 的本机练习。
-
-```powershell
-$env:STORAGE_DB_HOST = '127.0.0.1'
-$env:STORAGE_DB_PORT = '3306'
-$env:STORAGE_DB_NAME = 'cloud_storage'
-$env:STORAGE_DB_USER = 'storage_app'
-$env:STORAGE_DB_CONNECT_TIMEOUT = '3'
-$env:STORAGE_DB_READ_TIMEOUT = '3'
-$env:STORAGE_DB_WRITE_TIMEOUT = '3'
-
-# 本机练习显式选择：必须 TLS 加密，但不校验服务器身份。
-$env:STORAGE_DB_REQUIRE_VERIFIED_TLS = '0'
-Remove-Item Env:\STORAGE_DB_TLS_CA_FILE -ErrorAction SilentlyContinue
-
-# 密码在提示中输入，不写入代码、脚本或终端命令历史。
-$dbPasswordInput = Read-Host '请输入 storage_app 的 MySQL 密码' -AsSecureString
-try {
-    $env:STORAGE_DB_PASSWORD = [System.Net.NetworkCredential]::new('', $dbPasswordInput).Password
-    & .\build\mysql-scaffold\mysql_connection_probe.exe
-} finally {
-    Remove-Item Env:\STORAGE_DB_PASSWORD -ErrorAction SilentlyContinue
-    $dbPasswordInput.Dispose()
-}
+```bash
+python3 src/server/database/setup_local.py
 ```
 
-成功输出：
+隐藏输入 MySQL 管理员密码和新的云盘用户密码（至少 12 字节）。脚本应用 [001_auth.sql](migrations/001_auth.sql)，创建独立的 `asynlog_storage` 与 `asynlog_storage_test`；不访问 `second_hand_platform`。不创建默认密码。初始用户通过 C++ `storage_create_user` 工具进行 scrypt 哈希及参数化插入。
 
-```text
-MySQL connection and ping succeeded.
+账号随机命名并限制来源为 `127.0.0.1`：
+
+- 业务账号：仅 `users SELECT`、`sessions SELECT/INSERT/DELETE`。
+- 隔离 HTTP 测试账号：同样最小权限，仅作用于测试库。
+- 测试数据账号：仅测试库 SELECT/INSERT/UPDATE/DELETE，不可访问业务库或执行 DDL。
+- 管理员只做迁移和一次性用户初始化，不作为 HTTP 服务账号，也不保存管理员密码。
+
+本地运行配置保存在 `build/local-auth/*.json`（目录 0700，文件 0600，Git 已忽略）。不要复制到 Client、提交到 Git 或公开输出文件内容。初始化脚本拒绝覆盖已有配置；若运行部分失败，已经创建的库/账号会保留，需管理员检查后再恢复，不自动删除数据。
+
+现有 `schema.sql.template` 是历史挖空练习，不要导入；正式脚本是 migrations/001_auth.sql。迁移新增会话表是为了保存 token 摘要、用户、创建与过期时间，让重启后验证和注销生效；内存 map 无法满足这一点。`IF NOT EXISTS` 不会修复不同的已有表结构，迁移到已有同名库前应检查结构。
+
+## 实际测试与启动
+
+仓库根目录：
+
+```bash
+python3 src/server/database/run_local.py runtime build/mysql/mysql_connection_probe
+python3 src/server/database/run_local.py test build/mysql/mysql_integration_tests
+python3 src/server/tests/auth_http_test.py
 ```
 
-MySQL 8.0.42 可能同时报告 `MYSQL_OPT_RECONNECT is deprecated`：本实现显式禁止自动重连，以避免事务丢失被隐藏，该提示不等于连接失败。
+第二项必须使用 `asynlog_storage_test`；事务内生成随机用户并测试 CRUD、认证、token 摘要、过期、注销、回滚，以及错误密码、库名和不可达端口。测试不会停止系统 MySQL。
 
-跨机器连接应使用默认的 `STORAGE_DB_REQUIRE_VERIFIED_TLS=1`，并设置 `STORAGE_DB_TLS_CA_FILE` 为可信 CA 的 PEM 文件路径，HOST 必须匹配证书中的服务器身份。`0` 仍强制 TLS，服务端不支持 TLS 时失败，不降级到明文。超时范围为 1～3600 秒，TLS 标志仅接受 `0`/`1`；未设置则默认 `1`。
+第三项运行**原项目服务端**，用临时工作目录和随机 HTTP 端口，真实登录后终止/重启服务，验证持久化 token，然后验证过期和注销；fixture 只在测试库创建带随机前缀的用户并在 finally 中删除。若已构建 `client_auth_smoke`，同时调用真实 Qt ApiClient，验证登录、自动 Bearer、注销。测试不会替换业务 `Storage.conf`、文件索引和数据目录。
 
-## 接进现有服务端时
+启动日常服务：
 
-独立示例已经可运行；原 `Test.cpp` 服务启动、Makefile 和 Qt 客户端尚未接入此模块。
+```bash
+cd src/server
+python3 database/run_local.py runtime ./test
+```
 
-1. 在 `main()` 启动工作线程前调用 `mysql_library_init`，失败则退出。
-2. 在 `service_module()` 所在线程创建配置和连接，调用 `open`，检查失败后再启动业务服务。`mysql_init` 会初始化调用线程所需的客户端线程状态。
-3. 连接必须活到仓储和业务服务之后，同一连接不得跨线程共享；工作线程释放连接后调用 `mysql_thread_end`。
-4. 主线程等待所有 MySQL 工作线程结束后，调用 `mysql_library_end`。
-5. Linux 服务目标需编译数据库源文件并链接 Linux 的 MySQL 客户端库；Windows `.lib/.dll` 不能用于 Linux。服务端在 WSL/虚拟机内运行时，`127.0.0.1` 指向其自身环境，需确认连接地址和网络访问权限。
+HTTP 使用 Storage.conf 的 8081；MySQL 保持 `127.0.0.1:3306`。Windows 只需访问 Linux HTTP 端口，不开放 3306。
 
-Qt 仍只通过 HTTP 请求服务端，不链接本模块、不保存数据库账号。下一步为 `UserRepository::findByAccount()` / `insert()` 的参数化 SQL，之后才是密码哈希验证、真实会话及 HTTP 接线。
+也可以直接设置 `mysql.env.example` 所示 STORAGE_DB_* 环境变量，不强制使用本地 JSON。`STORAGE_DB_REQUIRE_VERIFIED_TLS=0` 仍要求数据库 TLS；默认值 1 还校验证书身份，需要 CA。专用账号不得用 root 替代。数据库故障只报告操作与数字错误码，不输出原始错误消息或连接串。
 
-原练习背景见 [18：MySQL 接入框架与挖空练习](../../../docs/project-learning/18-MySQL接入框架与挖空练习.md)。其中 DB01/DB03 的“未实现”描述为 2026-10-27 的历史状态，以当前源码为准。`schema.sql.template` 仍是挖空模板，不能直接导入；现有文件元数据不迁移。
+## 实现边界
 
-参考：[MySQL 连接选项](https://dev.mysql.com/doc/c-api/8.0/en/mysql-options.html)、[mysql_real_connect](https://dev.mysql.com/doc/c-api/8.0/en/mysql-real-connect.html)、[线程生命周期](https://dev.mysql.com/doc/c-api/8.0/en/c-api-threaded-clients.html)。
+- `MySqlConnection`：C API RAII 连接、超时、utf8mb4、UTC、禁用自动重连；所有仓储和认证在同一个 libevent 线程使用连接。库初始化先于线程启动，连接析构后清理线程状态。
+- `Statement.hpp`：预处理 SQL、参数绑定、结果长度/NULL 检查；stmt RAII 释放结果和句柄，不拼接外部参数。
+- 用户名登录大小写敏感，不使用邮箱 OR 查询。用户 ID 为安全随机 `u_` + 32 hex。
+- scrypt 编码固定为 `scrypt$131072$8$1$<16-byte salt hex>$<32-byte key hex>`；不支持明文、旧普通摘要或任意参数编码。比较使用 CRYPTO_memcmp；不存在用户也执行一次派生。
+- token 为 RAND_bytes 生成的 32 字节随机数，以 64 hex 传输；数据库保存其 SHA-256 摘要。有效期 8 小时，UTC，服务端每次认证都查询数据库；注销删除会话。没有把 SHA-256 用来存用户密码。
+- Qt token 仅保存在 ApiClient 内存，登录页与主窗口共享；不持久化到本地明文文件。只向同源地址附加 token，不跟随重定向转发凭据；401 清理本地会话，注销网络失败保留 token 供重试。
+- 文件列表/上传下载的 Qt TODO 仍在，未声称实现用户文件隔离；现有文件元数据为全局存储。旧服务路由需要登录，不能据此当成多租户云盘上线。
+- 当前 scrypt 和 SQL 同步运行在 libevent 回调线程，密码派生会阻塞该事件循环；是当前最小接线的性能边界，后续应配合限流与独立认证工作队列。HTTP 为原项目明文开发服务，跨不可信网络需使用 HTTPS 入口。
+- 过期会话查询会拒绝，但不会自动删除；管理员可定期执行 `DELETE FROM sessions WHERE expires_at <= UTC_TIMESTAMP()`。
+
+参考：[MySQL C API 预处理语句](https://dev.mysql.com/doc/c-api/8.0/en/c-api-prepared-statement-interface-usage.html)、[OpenSSL scrypt](https://docs.openssl.org/3.0/man7/EVP_KDF-SCRYPT/)、[RAND_bytes](https://docs.openssl.org/3.0/man3/RAND_bytes/)。
