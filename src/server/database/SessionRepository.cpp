@@ -4,12 +4,6 @@
 #include <memory>
 #include <mysql.h>
 namespace storage::db {
-    SessionRepository::SessionRepository(MysqlConnection &connection) noexcept
-        : connection_(connection) 
-        {
-
-        }
-
 DbStatus SessionRepository::create(const std::string &hash, const std::string &id, std::int64_t expires) {
     return sql(connection_, "INSERT INTO sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,UTC_TIMESTAMP(),FROM_UNIXTIME(?))",
                {hash,id,std::to_string(expires)});
@@ -27,44 +21,7 @@ DbStatus SessionRepository::revoke(const std::string &hash) {
     return sql(connection_, "DELETE FROM sessions WHERE token_hash=?", {hash});
 }
 
-DbStatus SessionRepository::insert(const SessionRepository &record) {
-    if (!connection_.isOpen()) {
-        return {
-            DbCode::NotConnected,
-            "MySQL connection is not open"
-        };
-    }
-
-    // 定义 固定 SQL，用户数据不参与拼接
-    constexpr char sql[] = 
-        "INSERT INTO sesstion "
-        "(token_digest, user_id, expires_at) "
-        "VALUES(?, ?, ?)";
-    //  把 SQL 交给 MySQL 准备，
-    std::unique_ptr<MYSQL_STMT, decltype(&mysql_stmt_close)> stmt(
-            mysql_stmt_init(connection_.nativeHandle()),
-            &mysql_stmt_close
-            );
-
-    if (!stmt) {
-        return {
-            DbCode::DatabaseError,
-            "mysql_stmt_prepare failed, error code: " + std::tostring(mysql_stmt_error(stmt.get()))
-        };
-    }
-    (void)record;  // chaned the type of record
-    return {
-        DbCode:NotImplementd,
-        "Session isert is not implemented"
-    };
-}
-}
-#include "SessionRepository.hpp"
-
-#include <mysql.h>
-
-#include <memory>
-#include <string>
+} // namespace storage::db
 
 namespace storage::db {
 namespace {
@@ -275,8 +232,8 @@ DbStatus SessionRepository::insert(const SessionRecord &record)
     // 不使用字符串拼接，不使用 INSERT IGNORE 掩盖失败。
     constexpr char sql[] =
         "INSERT INTO sessions "
-        "(token_digest, user_id, expires_at) "
-        "VALUES (?, ?, ?)";
+        "(token_hash, user_id, created_at, expires_at) "
+        "VALUES (?, ?, UTC_TIMESTAMP(), ?)";
 
     // unique_ptr 管理 MYSQL_STMT。
     // 无论在哪个分支 return，都会自动调用 mysql_stmt_close。

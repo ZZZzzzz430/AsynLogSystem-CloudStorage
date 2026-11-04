@@ -29,6 +29,14 @@ int main() {
             require(users.insert(original));require(users.findByAccount(account,found));
             check(found.id==original.id&&found.passwordHash==hash,"parameterized INSERT and SELECT");
             check(users.insert(original).code==db::DbCode::Conflict,"unique constraint conflict");
+            db::SessionRecord record{auth::tokenHash(auth::randomHex(32)),original.id,"2099-01-01T00:00:00Z"};
+            require(sessions.insert(record));
+            require(sessions.find(record.tokenDigest,found));
+            check(found.id==original.id,"session record INSERT matches schema and can be queried");
+            check(sessions.insert(record).code==db::DbCode::Conflict,"duplicate session record rejected");
+            require(sessions.revoke(record.tokenDigest));
+            record.expiresAtUtc="2026-02-30T00:00:00Z";
+            check(sessions.insert(record).code==db::DbCode::InvalidConfig,"invalid session calendar date rejected");
             require(db::sql(c,"UPDATE users SET email=? WHERE id=?",{"test@example.invalid",original.id}));
             require(users.findByAccount(account,found));check(found.email=="test@example.invalid","UPDATE round trip");
             check(users.findByAccount("' OR 1=1 --",found).code==db::DbCode::NotFound&&found.id.empty(),"SQL injection rejected and output cleared");
