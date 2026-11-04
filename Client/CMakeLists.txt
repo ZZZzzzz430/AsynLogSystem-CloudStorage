@@ -66,3 +66,18 @@ install(TARGETS Client
 
 # 完成 Qt6 可执行文件配置
 qt_finalize_executable(Client)
+
+include(CTest)
+if(BUILD_TESTING)
+    # Manual real-network test; requires isolated credentials and a running server.
+    qt_add_executable(client_auth_smoke tests/auth_smoke.cpp ApiClient.cpp ApiClient.hpp)
+    target_include_directories(client_auth_smoke PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(client_auth_smoke PRIVATE Qt6::Network)
+endif()
+if(BUILD_TESTING)
+    set(CLIENT_UI_TEST_SOURCES ${PROJECT_SOURCES})
+    list(REMOVE_ITEM CLIENT_UI_TEST_SOURCES main.cpp)
+    qt_add_executable(client_ui_smoke tests/login_ui_smoke.cpp ${CLIENT_UI_TEST_SOURCES})
+    target_include_directories(client_ui_smoke PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(client_ui_smoke PRIVATE Qt6::Widgets Qt6::Network)
+endif()

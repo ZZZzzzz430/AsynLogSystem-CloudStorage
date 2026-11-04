@@ -5,20 +5,92 @@
 #include <QNetworkReply>
 #include <QTimer>
 #include <QDebug>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <memory> // std::make_shared 的直接依赖，不依赖 Qt 头文件间接包含。
 
-// TODO E01（用户练习）：按实际服务端认证契约补齐这里。
-// 1. 创建真实请求；2. 管理 reply/超时/取消；3. 检查 HTTP 和业务身份结果；
-// 4. 只在身份确认通过时 emit loginFinished(true, ...)，否则给出失败原因。
-// 目前不拼接假 /login，不写死账号，也不使用定时器默认放行。
-// TODO DB06：服务端的 MySQL 仓储和 /api/v1/auth/login 真正完成后再实现 HTTP。
-// Qt 客户端只调用服务接口，不链接 MySQL、不持有 STORAGE_DB_* 数据库凭据。
-void ApiClient::login(const QUrl &serverUrl, const QString &account, const QString &password)
-{
-    Q_UNUSED(serverUrl)
-    Q_UNUSED(account)
-    Q_UNUSED(password)
-    emit loginFinished(false, tr("登录服务暂不可用，请联系管理员。"));
+namespace {
+void timeoutReply(QNetworkReply *reply) {
+    auto *timer = new QTimer(reply);
+    timer->setSingleShot(true);
+    QObject::connect(timer, &QTimer::timeout, reply, [reply] { reply->abort(); });
+    QObject::connect(reply, &QNetworkReply::finished, timer, &QTimer::stop);
+    timer->start(10000);
+}
+bool sameOrigin(const QUrl &a, const QUrl &b) {
+    return a.scheme() == b.scheme() && a.host() == b.host()
+        && a.port(a.scheme() == "https" ? 443 : 80) == b.port(b.scheme() == "https" ? 443 : 80);
+}
+}
+void ApiClient::clearSession() {
+    token_.clear(); expiresAt_ = {}; sessionServer_ = QUrl();
+}
+QNetworkRequest ApiClient::request(const QUrl &serverUrl, const QString &path, bool authenticated) const {
+    QUrl url = serverUrl;
+    url.setPath(path); url.setQuery(QString()); url.setFragment(QString());
+    QNetworkRequest req(url);
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    if (authenticated && sameOrigin(serverUrl, sessionServer_) && expiresAt_ > QDateTime::currentDateTimeUtc())
+        req.setRawHeader("Authorization", "Bearer " + token_);
+    return req;
+}
+void ApiClient::login(const QUrl &serverUrl, const QString &account, const QString &password) {
+    if (loginPending_) return;
+    clearSession();
+    if ((serverUrl.scheme() != "http" && serverUrl.scheme() != "https") || serverUrl.host().isEmpty()
+        || !serverUrl.userInfo().isEmpty()) {
+        emit loginFinished(false, tr("服务器地址无效。")); return;
+    }
+    loginPending_ = true;
+    QJsonObject body; body["account"] = account; body["password"] = password;
+    auto *reply = manager_->post(request(serverUrl, "/api/v1/auth/login", false), QJsonDocument(body).toJson(QJsonDocument::Compact));
+    timeoutReply(reply);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, serverUrl] {
+        loginPending_ = false;
+        int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        QJsonParseError error;
+        const auto doc = QJsonDocument::fromJson(reply->readAll(), &error);
+        const auto body = doc.object();
+        QByteArray token = body["token"].toString().toLatin1();
+        auto expires = QDateTime::fromString(body["expiresAt"].toString(), Qt::ISODate);
+        bool tokenValid = token.size() == 64;
+        for (char c : token) tokenValid = tokenValid && ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'));
+        bool ok = reply->error() == QNetworkReply::NoError && status == 200
+            && error.error == QJsonParseError::NoError && tokenValid
+            && expires.isValid() && expires > QDateTime::currentDateTimeUtc()
+            && !body["user"].toObject()["id"].toString().isEmpty()
+            && !body["user"].toObject()["username"].toString().isEmpty();
+        if (ok) { token_ = token; expiresAt_ = expires; sessionServer_ = serverUrl; }
+        else clearSession();
+        reply->deleteLater();
+        emit loginFinished(ok, ok ? tr("登录成功。") : status == 401 ? tr("账号或密码错误。") : tr("登录失败，请检查服务与网络。"));
+    });
+}
+void ApiClient::verifySession(const QUrl &serverUrl) {
+    auto *reply = manager_->get(request(serverUrl, "/api/v1/auth/me", true));
+    timeoutReply(reply);
+    connect(reply, &QNetworkReply::finished, this, [this, reply] {
+        int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        auto body = QJsonDocument::fromJson(reply->readAll()).object();
+        bool ok = reply->error() == QNetworkReply::NoError && status == 200
+            && !body["user"].toObject()["id"].toString().isEmpty();
+        if (status == 401) clearSession();
+        reply->deleteLater();
+        emit sessionVerified(ok, ok ? tr("会话验证成功。") : tr("会话验证失败，请重新登录。"));
+    });
+}
+void ApiClient::logout(const QUrl &serverUrl) {
+    auto *reply = manager_->post(request(serverUrl, "/api/v1/auth/logout", true), QByteArray());
+    timeoutReply(reply);
+    connect(reply, &QNetworkReply::finished, this, [this, reply] {
+        int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        bool ok = reply->error() == QNetworkReply::NoError && status == 200;
+        // If the network failed, retain the token so logout can be retried.
+        if (ok || status == 401) clearSession();
+        reply->deleteLater();
+        emit logoutFinished(ok || status == 401, ok ? tr("已注销。") : tr("注销未确认，请重试。"));
+    });
 }
 
 // TODO E04（用户练习）：实现旧协议 low 上传；FileName 使用文件名 UTF-8 的 Base64，
@@ -53,7 +125,7 @@ ApiClient::ApiClient(QObject* parent)
 void ApiClient::testConnection(const QUrl& serverUrl)
 {
     // 1. 创建 HTTP 请求
-    QNetworkRequest request(serverUrl);
+    QNetworkRequest request = this->request(serverUrl, "/health", false);
 
     // 2. 发送 GET 请求（异步执行）
     QNetworkReply* reply = manager_->get(request);

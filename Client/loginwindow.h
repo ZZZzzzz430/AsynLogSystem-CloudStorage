@@ -22,6 +22,7 @@ public:
     // main() 在栈上创建无父窗口的 LoginWindow，使其存活到事件循环结束。
     // 如果传入 parent，则仍遵循 Qt 的父子对象所有权规则。
     explicit LoginWindow(QWidget *parent = nullptr);
+    ApiClient *apiClient() const { return client_; }
 
 public slots:
     // 认证结果的唯一接入口；只处理本窗口正在等待的一次请求。

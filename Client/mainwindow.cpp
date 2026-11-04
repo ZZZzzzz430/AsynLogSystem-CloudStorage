@@ -1,4 +1,7 @@
 #include "mainwindow.h"
+#include <QAction>
+#include <QMenuBar>
+#include <QStatusBar>
 #include "./ui_mainwindow.h"
 #include "clienttheme.h"
 
@@ -16,12 +19,22 @@
 #include "ApiClient.hpp"
 
 // 保留原主页面及连接测试接线；仅由入口在验证成功后创建并显示。
-MainWindow::MainWindow(QWidget *parent)
+MainWindow::MainWindow(ApiClient *client, QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
-    , client_(new ApiClient(this))
+    , client_(client)
 {
     ui->setupUi(this);
+    auto *logoutAction = menuBar()->addAction(tr("注销"));
+    connect(logoutAction, &QAction::triggered, this, [this] {
+        QUrl url; if (readServerUrl(url)) client_->logout(url);
+    });
+    connect(client_, &ApiClient::logoutFinished, this, [this](bool ok, const QString &message) {
+        statusBar()->showMessage(message); if (ok) close();
+    });
+    connect(client_, &ApiClient::sessionVerified, this, [this](bool, const QString &message) {
+        statusBar()->showMessage(message);
+    });
     setupWorkspace();
 
     // 页面只采集输入和展示状态，真实传输仍交给 ApiClient 中留给用户的接口。
@@ -87,6 +100,7 @@ void MainWindow::setServerUrl(const QUrl &serverUrl)
     ui->serverUrlEdit->setText(serverUrl.toString());
     ui->serverHintLabel->setText(serverUrl.host());
     ui->serverHintLabel->setToolTip(serverUrl.toString());
+    client_->verifySession(serverUrl);
 }
 
 // 这个函数仅完成“选择和展示”，不是 D02 已通过，更不是远端上传已成功。

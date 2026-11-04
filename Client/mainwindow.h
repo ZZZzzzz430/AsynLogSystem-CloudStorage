@@ -16,8 +16,8 @@ class MainWindow : public QMainWindow
 
 public:
     // 验证成功后由 main() 延迟创建；窗口及 ApiClient 都在 GUI 线程工作。
-    MainWindow(QWidget *parent = nullptr);
-    // 只手动释放 UI 包装对象；子控件和 client_ 由 QObject 父子关系释放。
+    MainWindow(ApiClient *client, QWidget *parent = nullptr);
+    // 只手动释放 UI 包装对象；client_ 借用登录窗口持有的网络客户端。
     ~MainWindow();
 
     // 登录成功后由 main 注入同一次提交使用的服务器地址，不在构造时自动发请求。
@@ -53,7 +53,7 @@ private:
 
     // setupUi() 创建的控件归 MainWindow 所有，ui 只是访问这些控件的包装对象。
     Ui::MainWindow *ui;
-    // 父对象是 this，随主窗口销毁；登录窗口不复用此连接测试对象进行认证。
+    // 借用 LoginWindow 的客户端；LoginWindow 活到主窗口析构之后。
     ApiClient* client_ = nullptr;
 
     // 只保存用户主动选中的本地候选文件；不把它当作已经上传的远端文件。

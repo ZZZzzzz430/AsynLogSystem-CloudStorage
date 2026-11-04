@@ -114,9 +114,9 @@ void LoginWindow::setupUi()
 
     accountEdit_ = new QLineEdit(card);
     accountEdit_->setObjectName(QStringLiteral("accountEdit"));
-    accountEdit_->setPlaceholderText(tr("请输入账号或邮箱"));
+    accountEdit_->setPlaceholderText(tr("请输入用户名"));
     accountEdit_->addAction(ClientTheme::icon(ClientTheme::Symbol::Account), QLineEdit::LeadingPosition);
-    addField(form, card, tr("账号 / 邮箱"), accountEdit_);
+    addField(form, card, tr("用户名"), accountEdit_);
     form->addSpacing(5);
 
     passwordEdit_ = new QLineEdit(card);

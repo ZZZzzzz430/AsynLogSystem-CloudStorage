@@ -28,8 +28,8 @@ int main(int argc, char *argv[])
         if (mainWindow) {
             return; // 防止重复成功通知创建多个主窗口。
         }
-        mainWindow = std::make_unique<MainWindow>();
-        // 把提交时的服务器地址传给文件页；未来还需要用户自行接入真实会话凭据。
+        mainWindow = std::make_unique<MainWindow>(login.apiClient());
+        // Share the authenticated ApiClient owned by login, which outlives mainWindow.
         mainWindow->setServerUrl(serverUrl);
         // 先 show 再 hide，切换期间始终有可见窗口，避免最后窗口关闭导致退出。
         mainWindow->show();

@@ -3,6 +3,8 @@
 #include <QObject>
 #include <QUrl>
 #include <QString>
+#include <QDateTime>
+#include <QNetworkRequest>
 #include <QNetworkAccessManager>
 
 class ApiClient : public QObject
@@ -14,7 +16,7 @@ public:
 
     void testConnection(const QUrl& serverUrl);
 
-    // TODO E01：实现真实认证请求与解析；当前只返回明确失败，不发虚构请求。
+    // Login and subsequent authenticated requests share one in-memory session.
     // 不记录密码、不保存凭据到成员、不把网络可达作为身份有效。
     void login(const QUrl &serverUrl, const QString &account, const QString &password);
 
@@ -24,8 +26,13 @@ public:
     // TODO E05：实现下载请求，通过 QSaveFile 在全部检查完成后提交目标。
     void downloadFile(const QUrl &serverUrl, const QString &remoteName, const QString &targetPath);
 
+    void verifySession(const QUrl &serverUrl);
+    void logout(const QUrl &serverUrl);
+
 signals:
-    // 认证结果和连接测试结果分属两个通道；占位认证永远返回 false。
+    void sessionVerified(bool valid, const QString &message);
+    void logoutFinished(bool completed, const QString &message);
+    // 认证结果与连接测试结果分属两个通道。
     void loginFinished(bool verified, const QString &message);
 
     // completed=true 必须代表最终确认完成；占位传输永远返回 false。
@@ -42,5 +49,11 @@ signals:
     );
 
 private:
+    QNetworkRequest request(const QUrl &serverUrl, const QString &path, bool authenticated) const;
+    void clearSession();
     QNetworkAccessManager* manager_;
+    QByteArray token_;
+    QDateTime expiresAt_;
+    QUrl sessionServer_;
+    bool loginPending_ = false;
 };
