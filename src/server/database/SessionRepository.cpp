@@ -1,83 +1,24 @@
-#include "SessionRepository.hpp"
-#include "Statement.hpp"
 
-#include <memory>
-#include <mysql.h>
-namespace storage::db {
-    SessionRepository::SessionRepository(MysqlConnection &connection) noexcept
-        : connection_(connection) 
-        {
-
-        }
-
-DbStatus SessionRepository::create(const std::string &hash, const std::string &id, std::int64_t expires) {
-    return sql(connection_, "INSERT INTO sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,UTC_TIMESTAMP(),FROM_UNIXTIME(?))",
-               {hash,id,std::to_string(expires)});
-}
-DbStatus SessionRepository::find(const std::string &hash, UserRecord &out) {
-    out = {};
-    std::vector<std::vector<std::string>> rows;
-    auto s = sql(connection_, "SELECT u.id,u.username FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>UTC_TIMESTAMP()", {hash}, &rows);
-    if (!s.ok()) return s;
-    if (rows.empty()) return {DbCode::NotFound, "Session unavailable"};
-    out.id = rows[0][0]; out.username = rows[0][1];
-    return {DbCode::Ok, {}};
-}
-DbStatus SessionRepository::revoke(const std::string &hash) {
-    return sql(connection_, "DELETE FROM sessions WHERE token_hash=?", {hash});
-}
-
-DbStatus SessionRepository::insert(const SessionRepository &record) {
-    if (!connection_.isOpen()) {
-        return {
-            DbCode::NotConnected,
-            "MySQL connection is not open"
-        };
-    }
-
-    // 定义 固定 SQL，用户数据不参与拼接
-    constexpr char sql[] = 
-        "INSERT INTO sesstion "
-        "(token_digest, user_id, expires_at) "
-        "VALUES(?, ?, ?)";
-    //  把 SQL 交给 MySQL 准备，
-    std::unique_ptr<MYSQL_STMT, decltype(&mysql_stmt_close)> stmt(
-            mysql_stmt_init(connection_.nativeHandle()),
-            &mysql_stmt_close
-            );
-
-    if (!stmt) {
-        return {
-            DbCode::DatabaseError,
-            "mysql_stmt_prepare failed, error code: " + std::tostring(mysql_stmt_error(stmt.get()))
-        };
-    }
-    (void)record;  // chaned the type of record
-    return {
-        DbCode:NotImplementd,
-        "Session isert is not implemented"
-    };
-}
-}
 #include "SessionRepository.hpp"
 
 #include <mysql.h>
 
+#include <cstddef>
 #include <memory>
 #include <string>
 
 namespace storage::db {
+
 namespace {
 
-// 检查从 begin 开始的所有字符是否都是小写十六进制字符。
-// 固定一种表示方式，避免同一摘要出现大小写不同的文本形式。
-bool isLowerHex(const std::string &text, std::size_t begin)
+// 检查指定位置之后的字符是否全部为小写十六进制字符。
+bool isLowerHex(const std::string& text, std::size_t begin)
 {
     for (std::size_t i = begin; i < text.size(); ++i) {
         const char ch = text[i];
 
-        const bool isDigit = ch >= '0' && ch <= '9';
-        const bool isLowerLetter = ch >= 'a' && ch <= 'f';
+        const bool isDigit = (ch >= '0' && ch <= '9');
+        const bool isLowerLetter = (ch >= 'a' && ch <= 'f');
 
         if (!isDigit && !isLowerLetter) {
             return false;
@@ -87,16 +28,18 @@ bool isLowerHex(const std::string &text, std::size_t begin)
     return true;
 }
 
-// 读取固定位置的一段十进制数字。
-//
-// 调用方先保证字符串总长度正确，因此这里不会越界。
-// 不接受正负号、空格、字母等内容。
+// 读取指定位置的十进制数字。
 bool readDigits(
-    const std::string &text,
+    const std::string& text,
     std::size_t begin,
     std::size_t count,
-    unsigned int &out)
+    unsigned int& out)
 {
+    if (begin > text.size() ||
+        count > text.size() - begin) {
+        return false;
+    }
+
     unsigned int value = 0;
 
     for (std::size_t i = begin; i < begin + count; ++i) {
@@ -114,17 +57,12 @@ bool readDigits(
     return true;
 }
 
-// 将严格格式的 UTC 文本转换成 MYSQL_TIME。
-//
-// 输入示例：2026-10-29T08:30:00Z
-//
-// 不使用 mktime，因为 mktime 会按本地时区解释输入。
-// DATETIME 本身不保存时区；本仓储约定其中所有字段均属于 UTC。
-bool parseUtc(const std::string &text, MYSQL_TIME &out)
+// 将严格格式的 UTC 时间字符串转换为 MYSQL_TIME。
+// 格式：YYYY-MM-DDTHH:MM:SSZ
+bool parseUtc(const std::string& text, MYSQL_TIME& out)
 {
     out = MYSQL_TIME{};
 
-    // 第一步：检查总长度和固定分隔符。
     if (text.size() != 20 ||
         text[4] != '-' ||
         text[7] != '-' ||
@@ -137,7 +75,6 @@ bool parseUtc(const std::string &text, MYSQL_TIME &out)
 
     MYSQL_TIME value{};
 
-    // 第二步：分别提取年月日时分秒。
     if (!readDigits(text, 0, 4, value.year) ||
         !readDigits(text, 5, 2, value.month) ||
         !readDigits(text, 8, 2, value.day) ||
@@ -147,8 +84,6 @@ bool parseUtc(const std::string &text, MYSQL_TIME &out)
         return false;
     }
 
-    // 第三步：检查基本范围。
-    // 使用 DATETIME 的有效年份范围，不接受零日期和闰秒。
     if (value.year < 1000 || value.year > 9999 ||
         value.month < 1 || value.month > 12 ||
         value.hour > 23 ||
@@ -164,33 +99,29 @@ bool parseUtc(const std::string &text, MYSQL_TIME &out)
 
     unsigned int maxDay = daysPerMonth[value.month - 1];
 
-    // 闰年：能被 4 整除，但整百年份还需要能被 400 整除。
-    const bool leap =
-        value.year % 4 == 0 &&
+    const bool isLeapYear =
+        (value.year % 4 == 0) &&
         (value.year % 100 != 0 || value.year % 400 == 0);
 
-    if (value.month == 2 && leap) {
+    if (value.month == 2 && isLeapYear) {
         ++maxDay;
     }
 
-    // 拦截 2 月 30 日、4 月 31 日等不合法日期。
     if (value.day < 1 || value.day > maxDay) {
         return false;
     }
 
-    // {} 已经将微秒、负号等字段清零。
-    // 这里明确告诉 MySQL：这是完整日期时间。
     value.time_type = MYSQL_TIMESTAMP_DATETIME;
 
     out = value;
     return true;
 }
 
-// 统一生成语句错误结果。
-//
-// 只返回操作名和数字错误码，不附带用户输入、摘要或完整 SQL。
-// 不直接返回 mysql_stmt_error() 的原始文本，减少内部信息泄露。
-DbStatus statementError(MYSQL_STMT *stmt, const char *operation)
+// 统一处理 MySQL 预处理语句错误。
+// 不暴露 SQL 内容、用户数据或 token。
+DbStatus statementError(
+    MYSQL_STMT* stmt,
+    const char* operation)
 {
     return {
         DbCode::DatabaseError,
@@ -202,17 +133,19 @@ DbStatus statementError(MYSQL_STMT *stmt, const char *operation)
 
 } // namespace
 
+// 构造函数。
+// connection_ 是外部连接的引用，不负责连接的生命周期。
 SessionRepository::SessionRepository(
-    MySqlConnection &connection) noexcept
+    MySqlConnection& connection) noexcept
     : connection_(connection)
 {
-    // 仅绑定引用，不在构造函数里建立连接或执行 SQL。
 }
 
-DbStatus SessionRepository::insert(const SessionRecord &record)
+// 插入 Session 记录。
+DbStatus SessionRepository::insert(
+    const SessionRecord& record)
 {
-    // 1. 检查连接是否已经成功打开。
-    // isOpen 不保证服务器此刻仍然可达，后续 API 仍须检查错误。
+    // 1. 检查数据库连接。
     if (!connection_.isOpen()) {
         return {
             DbCode::NotConnected,
@@ -220,48 +153,41 @@ DbStatus SessionRepository::insert(const SessionRecord &record)
         };
     }
 
-    // 2. 校验摘要。
-    //
-    // 沿用现有 DbCode，本例将无效记录归入 InvalidConfig，
-    // 因此不需要修改 DbStatus.hpp。
-    //
-    // 固定长度也保证后面的 unsigned long 转换不会溢出。
+    // 2. 校验 token 摘要。
+    // 要求 64 位小写十六进制字符。
     if (record.tokenDigest.size() != 64 ||
         !isLowerHex(record.tokenDigest, 0)) {
         return {
             DbCode::InvalidConfig,
-            "tokenDigest must contain 64 lowercase hex characters"
+            "tokenDigest must contain "
+            "64 lowercase hex characters"
         };
     }
 
     // 3. 校验用户 ID。
+    // 格式：u_ + 32 位小写十六进制字符。
     if (record.userId.size() != 34 ||
         record.userId.compare(0, 2, "u_") != 0 ||
         !isLowerHex(record.userId, 2)) {
         return {
             DbCode::InvalidConfig,
-            "userId must be u_ followed by 32 lowercase hex characters"
+            "userId must be u_ followed by "
+            "32 lowercase hex characters"
         };
     }
 
-    // 4. 校验并转换到期时间。
+    // 4. 校验 UTC 到期时间。
     MYSQL_TIME expiresAt{};
 
     if (!parseUtc(record.expiresAtUtc, expiresAt)) {
         return {
             DbCode::InvalidConfig,
-            "expiresAtUtc must be a valid YYYY-MM-DDTHH:MM:SSZ datetime"
+            "expiresAtUtc must be a valid "
+            "YYYY-MM-DDTHH:MM:SSZ datetime"
         };
     }
 
-    // 会话有效期由 AuthService 计算。
-    // 本仓储检查日期是否合法，不负责决定有效期或判断是否已经过期。
-
-    // 5. 准备输入缓冲区。
-    //
-    // record 是 const 引用；复制到局部字符串后，
-    // C++17 的 data() 可以提供 C API 所需的 char*，
-    // 不需要 const_cast，也不会修改调用方的数据。
+    // 5. 准备参数缓冲区。
     std::string digest = record.tokenDigest;
     std::string userId = record.userId;
 
@@ -271,17 +197,18 @@ DbStatus SessionRepository::insert(const SessionRecord &record)
     unsigned long userIdLength =
         static_cast<unsigned long>(userId.size());
 
-    // 6. SQL 结构固定，三个输入全部使用参数绑定。
-    // 不使用字符串拼接，不使用 INSERT IGNORE 掩盖失败。
+    // 6. 固定 SQL，所有用户数据通过参数绑定。
     constexpr char sql[] =
         "INSERT INTO sessions "
         "(token_digest, user_id, expires_at) "
         "VALUES (?, ?, ?)";
 
-    // unique_ptr 管理 MYSQL_STMT。
-    // 无论在哪个分支 return，都会自动调用 mysql_stmt_close。
+    // 使用 RAII 自动释放 MYSQL_STMT。
     using StatementPtr =
-        std::unique_ptr<MYSQL_STMT, decltype(&mysql_stmt_close)>;
+        std::unique_ptr<
+            MYSQL_STMT,
+            decltype(&mysql_stmt_close)
+        >;
 
     StatementPtr stmt(
         mysql_stmt_init(connection_.nativeHandle()),
@@ -295,14 +222,19 @@ DbStatus SessionRepository::insert(const SessionRecord &record)
         };
     }
 
-    // 7. 准备 SQL。
-    // sizeof(sql) 包含末尾 '\0'，实际 SQL 长度需要减 1。
+    // 7. 准备预处理语句。
     if (mysql_stmt_prepare(
-            stmt.get(), sql, sizeof(sql) - 1) != 0) {
-        return statementError(stmt.get(), "mysql_stmt_prepare");
+            stmt.get(),
+            sql,
+            static_cast<unsigned long>(sizeof(sql) - 1)
+        ) != 0) {
+        return statementError(
+            stmt.get(),
+            "mysql_stmt_prepare"
+        );
     }
 
-    // 防止未来修改 SQL 时，忘记同步修改绑定数组。
+    // 检查参数数量是否符合预期。
     if (mysql_stmt_param_count(stmt.get()) != 3) {
         return {
             DbCode::DatabaseError,
@@ -310,46 +242,42 @@ DbStatus SessionRepository::insert(const SessionRecord &record)
         };
     }
 
-    // 8. 描述三个参数。
-    //
-    // {} 清零所有成员。
-    // is_null 为 nullptr，表示这里提供的参数不是 SQL NULL。
+    // 8. 绑定 SQL 参数。
     MYSQL_BIND params[3]{};
 
-    // 第一个 ?：token 摘要。
+    // 参数 1：token_digest
     params[0].buffer_type = MYSQL_TYPE_STRING;
     params[0].buffer = digest.data();
     params[0].buffer_length = digestLength;
     params[0].length = &digestLength;
 
-    // 第二个 ?：用户 ID。
+    // 参数 2：user_id
     params[1].buffer_type = MYSQL_TYPE_STRING;
     params[1].buffer = userId.data();
     params[1].buffer_length = userIdLength;
     params[1].length = &userIdLength;
 
-    // 第三个 ?：到期时间。
-    //
-    // 使用 MYSQL_TIME 绑定完整日期时间，
-    // 不依赖数据库隐式解析带 T、Z 的字符串。
-    // 固定类型的时间参数无需设置字符串 length 指针。
+    // 参数 3：expires_at
     params[2].buffer_type = MYSQL_TYPE_DATETIME;
     params[2].buffer = &expiresAt;
-    params[2].buffer_length = sizeof(expiresAt);
+    params[2].buffer_length =
+        static_cast<unsigned long>(sizeof(expiresAt));
 
-    // 9. 绑定全部参数。
-    // 绑定成功还不等于插入成功。
-    if (mysql_stmt_bind_param(stmt.get(), params) != 0) {
-        return statementError(stmt.get(), "mysql_stmt_bind_param");
+    // 9. 提交参数绑定。
+    if (mysql_stmt_bind_param(
+            stmt.get(),
+            params
+        ) != 0) {
+        return statementError(
+            stmt.get(),
+            "mysql_stmt_bind_param"
+        );
     }
 
-    // 10. 真正执行 INSERT。
-    //
-    // digest、userId、长度变量及 expiresAt，
-    // 都在本函数作用域内，能够存活到同步执行结束。
+    // 10. 执行 INSERT。
     if (mysql_stmt_execute(stmt.get()) != 0) {
-        // 1062：唯一键冲突。
-        // 本表以摘要为主键，重复摘要会由数据库最终拦截。
+
+        // MySQL 错误码 1062：唯一键冲突。
         if (mysql_stmt_errno(stmt.get()) == 1062) {
             return {
                 DbCode::Conflict,
@@ -357,12 +285,13 @@ DbStatus SessionRepository::insert(const SessionRecord &record)
             };
         }
 
-        // 外键错误、连接中断、权限不足等保持为数据库故障，
-        // 不混同为“密码错误”或“查不到用户”。
-        return statementError(stmt.get(), "mysql_stmt_execute");
+        return statementError(
+            stmt.get(),
+            "mysql_stmt_execute"
+        );
     }
 
-    // 11. 普通单行 INSERT 应影响一行。
+    // 11. 确认实际插入一行。
     if (mysql_stmt_affected_rows(stmt.get()) != 1) {
         return {
             DbCode::DatabaseError,
@@ -370,14 +299,12 @@ DbStatus SessionRepository::insert(const SessionRecord &record)
         };
     }
 
-    // 12. 操作成功。
-    //
-    // 不在仓储中私自提交调用方的事务，不自动重试写入。
-    // 网络故障可能导致提交结果未知，业务层不能据此放行登录。
-    return {DbCode::Ok, {}};
-
-    // 离开作用域后自动释放 stmt；
-    // connection_ 仍由调用方拥有和管理。
+    // 12. 插入成功。
+    // 不擅自提交事务，事务由调用方管理。
+    return {
+        DbCode::Ok,
+        {}
+    };
 }
 
 } // namespace storage::db

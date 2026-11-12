@@ -17,6 +17,6 @@ CREATE TABLE IF NOT EXISTS sessions (
     INDEX sessions_expiry(expires_at)
 ) ENGINE=InnoDB;
 -- Provision storage_app@127.0.0.1 separately using a locally generated password.
--- GRANT SELECT ON asynlog_storage.users TO 'storage_app'@'127.0.0.1';
+-- GRANT SELECT, INSERT ON asynlog_storage.users TO 'storage_app'@'127.0.0.1';
 -- GRANT SELECT, INSERT, DELETE ON asynlog_storage.sessions TO 'storage_app'@'127.0.0.1';
 -- User provisioning/migrations/tests use a separate administrator or test account.

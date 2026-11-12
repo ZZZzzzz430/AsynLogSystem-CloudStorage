@@ -56,7 +56,7 @@ with tempfile.TemporaryDirectory(prefix='asynlog-setup-') as directory:
         # All interpolated values above are fixed identifiers or generated hex, never external SQL.
         mysql(f"CREATE USER '{user}'@'127.0.0.1' IDENTIFIED BY '{secret}';\n"
               + (f"GRANT SELECT,INSERT,UPDATE,DELETE ON {database}.* TO '{user}'@'127.0.0.1';" if provisioning else
-                 f"GRANT SELECT ON {database}.users TO '{user}'@'127.0.0.1';\n"
+                 f"GRANT SELECT,INSERT ON {database}.users TO '{user}'@'127.0.0.1';\n"
                  f"GRANT SELECT,INSERT,DELETE ON {database}.sessions TO '{user}'@'127.0.0.1';"))
     # Administrator is used only by this one-off provisioning process, never by the HTTP server.
     subprocess.run([str(ROOT / 'build/mysql/storage_create_user'), account],

@@ -24,7 +24,7 @@ public:
     // 失败必须清空 out，避免调用者误用上一次查询留下的用户身份。
     [[nodiscard]] DbStatus findByAccount(const std::string &account, UserRecord &out);
 
-    // 仅供用户初始化工具使用，只接收已哈希的记录。
+    // 供注册服务和用户初始化工具使用，只接收已哈希的记录。
     // 唯一键冲突返回 Conflict，不用“先查不存在再插入”替代数据库唯一约束。
     [[nodiscard]] DbStatus insert(const UserRecord &record);
 

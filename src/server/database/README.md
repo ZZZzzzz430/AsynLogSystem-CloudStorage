@@ -28,7 +28,7 @@ python3 src/server/database/setup_local.py
 
 账号随机命名并限制来源为 `127.0.0.1`：
 
-- 业务账号：仅 `users SELECT`、`sessions SELECT/INSERT/DELETE`。
+- 业务账号：仅 `users SELECT/INSERT`、`sessions SELECT/INSERT/DELETE`。
 - 隔离 HTTP 测试账号：同样最小权限，仅作用于测试库。
 - 测试数据账号：仅测试库 SELECT/INSERT/UPDATE/DELETE，不可访问业务库或执行 DDL。
 - 管理员只做迁移和一次性用户初始化，不作为 HTTP 服务账号，也不保存管理员密码。
@@ -36,6 +36,49 @@ python3 src/server/database/setup_local.py
 本地运行配置保存在 `build/local-auth/*.json`（目录 0700，文件 0600，Git 已忽略）。不要复制到 Client、提交到 Git 或公开输出文件内容。初始化脚本拒绝覆盖已有配置；若运行部分失败，已经创建的库/账号会保留，需管理员检查后再恢复，不自动删除数据。
 
 现有 `schema.sql.template` 是历史挖空练习，不要导入；正式脚本是 migrations/001_auth.sql。迁移新增会话表是为了保存 token 摘要、用户、创建与过期时间，让重启后验证和注销生效；内存 map 无法满足这一点。`IF NOT EXISTS` 不会修复不同的已有表结构，迁移到已有同名库前应检查结构。
+
+## 注册功能：已有环境增量授权（E-3）
+
+代码编辑、阅读文档和离线测试不需要启动 MySQL。只有执行 GRANT 和验证真实注册时才需要启动数据库。
+
+新环境使用更新后的 `setup_local.py`，已经包含 `users INSERT`。已有环境不要删除配置或重新初始化；使用 [002 授权模板](migrations/002_registration_grants.sql.template) 和 [升级工具](upgrade_registration.py) 为现有账号补权限。
+
+以下命令在 Linux 部署机器的仓库根目录执行：
+
+```bash
+# 仅预览；读取现有账号名称，不连接数据库、不输出业务密码。
+python3 src/server/database/upgrade_registration.py
+
+# MySQL 启动后才执行；管理员密码通过终端隐藏输入。
+python3 src/server/database/upgrade_registration.py --apply --admin root
+```
+
+默认升级 `runtime.json` 和 `http-test.json` 对应的两个账号。若仅部署业务环境，使用 `--target runtime`；仅升级 HTTP 测试环境使用 `--target http-test`。配置不在默认目录时使用 `--config-dir /绝对路径/local-auth`。工具只接受初始化脚本生成的本机专用账号和两套固定库名；自定义部署应由管理员核对实际库名、账号、来源地址后手工套用模板。
+
+`--apply` 只在 Linux 支持：管理员凭据临时写入私有目录内的 0600 文件，结束即删除，不出现在命令参数、SQL 或 Git 中。脚本不会启动 MySQL、创建账号、重置密码或修改表结构；服务仍使用原业务账号。各条 GRANT 不是一个可回滚事务，中途失败时前面的授权可能已经成功，可修复原因后重复执行。
+
+执行结果会包含 `SHOW GRANTS`。确认业务库/测试库的 `users` 有 SELECT 和 INSERT，`sessions` 原权限保留，未增加全库管理权限。该工具只补 INSERT，不负责撤销历史上已有的过宽授权；若发现多余权限，应单独核查。授权后重新连接服务，再进行实际注册验收。
+
+## 注册契约、限流与日志（E-4）
+
+- `POST /api/v1/auth/register`：必填字符串 `username/password`，可选字符串 `email`。用户名 4～16 个 ASCII 字母、数字、下划线或减号，密码 8～1024 字节；非空邮箱执行基本格式检查。
+- 注册成功返回 201 和公开用户 ID、用户名；只插入用户，不创建会话，不返回 token 或密码哈希。参数错误 400、唯一键冲突 409、请求体超过 4096 字节返回 413、频率限制 429、服务故障 503；方法错误 405。
+- HTTP 层检查 JSON 结构、字段类型和请求体大小；AuthService 检查字段值，UserRepository 使用参数化 INSERT；用户名并发冲突由数据库唯一约束裁决。
+- 当前为进程内固定窗口限流：登录每个 60 秒窗口 10 次，注册 5 次，所有客户端共享。失败请求也计数，超限带 Retry-After；被拒绝的请求不延长窗口。仅两个计数器，内存固定；进程重启会清空，多进程不共享，窗口边界允许集中突发，并非滑动窗口。
+- AuthAudit 自动记录固定操作名、HTTP 状态和处理耗时。禁止记录密码、密码哈希、完整 token、Authorization、数据库凭据或完整请求体。耗时止于处理函数退出，不是客户端收到响应的时间。
+
+详细学习与验收指南见 [22：服务端注册 A–E 实战与代码讲解](../../../docs/project-learning/22-服务端注册A-E实战与代码讲解.md)。当前提交文件不等于真实数据库已完成授权；请以命令执行结果和验收记录为准。
+
+## 不连接数据库的检查
+
+```bash
+python3 src/server/tests/registration_migration_test.py
+mkdir -p build/registration-checks
+g++ -std=c++17 -Wall -Wextra -pedantic src/server/tests/rate_limiter_test.cpp -o build/registration-checks/rate_limiter_test
+./build/registration-checks/rate_limiter_test
+```
+
+迁移测试仅使用临时模拟配置，验证默认预览不连接数据库、不提示密码、拒绝异常账号/库名/端口，以及双目标预检。限流测试注入时间验证窗口恢复，无需真的等一分钟。以上检查不代表真实 GRANT、HTTP 或数据库写入已经通过。
 
 ## 实际测试与启动
 

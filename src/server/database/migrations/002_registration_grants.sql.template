@@ -1,0 +1,5 @@
+-- Administrator-only incremental grant for an EXISTING local account.
+-- Render with upgrade_registration.py; do not execute placeholders directly.
+-- Does not create/drop databases, tables, users, or reset credentials.
+GRANT INSERT ON {{DATABASE}}.users TO '{{USER}}'@'127.0.0.1';
+SHOW GRANTS FOR '{{USER}}'@'127.0.0.1';
