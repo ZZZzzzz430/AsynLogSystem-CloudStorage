@@ -1,4 +1,5 @@
 
+<<<<<<< HEAD
 #include "SessionRepository.hpp"
 
 #include <mysql.h>
@@ -6,6 +7,29 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+=======
+#include <memory>
+#include <mysql.h>
+namespace storage::db {
+DbStatus SessionRepository::create(const std::string &hash, const std::string &id, std::int64_t expires) {
+    return sql(connection_, "INSERT INTO sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,UTC_TIMESTAMP(),FROM_UNIXTIME(?))",
+               {hash,id,std::to_string(expires)});
+}
+DbStatus SessionRepository::find(const std::string &hash, UserRecord &out) {
+    out = {};
+    std::vector<std::vector<std::string>> rows;
+    auto s = sql(connection_, "SELECT u.id,u.username FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>UTC_TIMESTAMP()", {hash}, &rows);
+    if (!s.ok()) return s;
+    if (rows.empty()) return {DbCode::NotFound, "Session unavailable"};
+    out.id = rows[0][0]; out.username = rows[0][1];
+    return {DbCode::Ok, {}};
+}
+DbStatus SessionRepository::revoke(const std::string &hash) {
+    return sql(connection_, "DELETE FROM sessions WHERE token_hash=?", {hash});
+}
+
+} // namespace storage::db
+>>>>>>> da0c9735ba63da381792299f1e17e5486aecf84d
 
 namespace storage::db {
 
@@ -200,8 +224,8 @@ DbStatus SessionRepository::insert(
     // 6. 固定 SQL，所有用户数据通过参数绑定。
     constexpr char sql[] =
         "INSERT INTO sessions "
-        "(token_digest, user_id, expires_at) "
-        "VALUES (?, ?, ?)";
+        "(token_hash, user_id, created_at, expires_at) "
+        "VALUES (?, ?, UTC_TIMESTAMP(), ?)";
 
     // 使用 RAII 自动释放 MYSQL_STMT。
     using StatementPtr =

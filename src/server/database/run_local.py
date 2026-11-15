@@ -8,6 +8,13 @@ ROOT = Path(__file__).resolve().parents[3]
 if len(sys.argv) < 3 or sys.argv[1] not in ('runtime', 'test', 'http-test'):
     raise SystemExit('Usage: run_local.py runtime|test|http-test COMMAND [ARGS...]')
 path = ROOT / 'build/local-auth' / (sys.argv[1] + '.json')
+if not path.is_file():
+    raise SystemExit(
+        f'Missing local database configuration: {path}\n'
+        'For a new local setup, run: python3 src/server/database/setup_local.py\n'
+        'For an existing database, supply STORAGE_DB_* environment variables '
+        'and run the executable directly; do not reinitialize existing data.'
+    )
 if path.stat().st_mode & 0o077:
     raise SystemExit('Credential file must have mode 0600')
 settings = json.loads(path.read_text())
