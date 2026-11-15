@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
     std::unique_ptr<MainWindow> mainWindow;
 
     // 认证接线移到 LoginWindow::setupConnections()：loginRequested → ApiClient::login
-    // → loginFinished → handleLoginResult。TODO E01 留在 ApiClient，不在入口默认放行。
+    // → loginFinished → handleLoginResult。注册成功只回填账号，不在入口放行。
 
     // 仅真实认证成功通知能走到这里；输入非空、按钮点击都不会直接打开主窗口。
     // 捕获的两个局部对象都活到 a.exec() 返回；回调在 GUI 线程执行。

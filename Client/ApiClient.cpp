@@ -10,12 +10,47 @@
 #include <memory> // std::make_shared 的直接依赖，不依赖 Qt 头文件间接包含。
 
 namespace {
-void timeoutReply(QNetworkReply *reply) {
+void timeoutReply(QNetworkReply *reply, int milliseconds = 10000) {
     auto *timer = new QTimer(reply);
     timer->setSingleShot(true);
-    QObject::connect(timer, &QTimer::timeout, reply, [reply] { reply->abort(); });
+    QObject::connect(timer, &QTimer::timeout, reply, [reply] {
+        reply->setProperty("requestTimedOut", true);
+        reply->abort();
+    });
     QObject::connect(reply, &QNetworkReply::finished, timer, &QTimer::stop);
-    timer->start(10000);
+    timer->start(milliseconds);
+}
+bool validServer(const QUrl &url) {
+    return url.isValid() && (url.scheme() == "http" || url.scheme() == "https")
+        && !url.host().isEmpty() && url.userInfo().isEmpty()
+        && !url.hasQuery() && !url.hasFragment()
+        && (url.path().isEmpty() || url.path() == "/");
+}
+QString authenticationFailure(QNetworkReply *reply, int status, bool registration) {
+    if (reply->property("requestTimedOut").toBool()
+        || reply->error() == QNetworkReply::TimeoutError)
+        return registration
+            ? QObject::tr("注册请求超时，结果尚未确认。可重试；若提示账号已存在，请尝试登录。")
+            : QObject::tr("登录请求超时，请重试。");
+    // HTTP 4xx/5xx 也会令 QNetworkReply::error() 非零，先解释明确的 HTTP 状态。
+    if (status == 400 || status == 422)
+        return QObject::tr("输入不符合要求，请检查用户名和密码。");
+    if (status == 413) return QObject::tr("提交内容过长，请缩短输入后重试。");
+    if (status == 409) return QObject::tr("该账号已存在，请更换用户名或返回登录。");
+    if (status == 429) {
+        bool valid = false;
+        const int seconds = reply->rawHeader("Retry-After").toInt(&valid);
+        return valid && seconds > 0
+            ? QObject::tr("请求过多，请在 %1 秒后重试。").arg(seconds)
+            : QObject::tr("请求过多，请稍后重试。");
+    }
+    if (status >= 500) return QObject::tr("服务暂不可用，请稍后重试。");
+    if (status == 401 && !registration) return QObject::tr("账号或密码错误。");
+    if (reply->error() != QNetworkReply::NoError)
+        return registration
+            ? QObject::tr("网络连接失败，注册结果尚未确认。请检查网络后重试；若账号已存在，请尝试登录。")
+            : QObject::tr("网络连接失败，请检查网络和服务器地址后重试。");
+    return QObject::tr("服务器响应异常，无法确认结果，请重试。");
 }
 bool sameOrigin(const QUrl &a, const QUrl &b) {
     return a.scheme() == b.scheme() && a.host() == b.host()
@@ -36,21 +71,20 @@ QNetworkRequest ApiClient::request(const QUrl &serverUrl, const QString &path, b
     return req;
 }
 void ApiClient::login(const QUrl &serverUrl, const QString &account, const QString &password) {
-    if (loginPending_) return;
+    if (authenticationReply_) return;
     clearSession();
-    if ((serverUrl.scheme() != "http" && serverUrl.scheme() != "https") || serverUrl.host().isEmpty()
-        || !serverUrl.userInfo().isEmpty()) {
+    if (!validServer(serverUrl)) {
         emit loginFinished(false, tr("服务器地址无效。")); return;
     }
-    loginPending_ = true;
     QJsonObject body; body["account"] = account; body["password"] = password;
     auto *reply = manager_->post(request(serverUrl, "/api/v1/auth/login", false), QJsonDocument(body).toJson(QJsonDocument::Compact));
-    timeoutReply(reply);
+    authenticationReply_ = reply;
+    timeoutReply(reply, authenticationTimeoutMs_);
     connect(reply, &QNetworkReply::finished, this, [this, reply, serverUrl] {
-        loginPending_ = false;
+        authenticationReply_.clear();
         int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         QJsonParseError error;
-        const auto doc = QJsonDocument::fromJson(reply->readAll(), &error);
+        const auto doc = QJsonDocument::fromJson(reply->isReadable() ? reply->readAll() : QByteArray(), &error);
         const auto body = doc.object();
         QByteArray token = body["token"].toString().toLatin1();
         auto expires = QDateTime::fromString(body["expiresAt"].toString(), Qt::ISODate);
@@ -63,9 +97,45 @@ void ApiClient::login(const QUrl &serverUrl, const QString &account, const QStri
             && !body["user"].toObject()["username"].toString().isEmpty();
         if (ok) { token_ = token; expiresAt_ = expires; sessionServer_ = serverUrl; }
         else clearSession();
+        const QString message = ok ? tr("登录成功。") : authenticationFailure(reply, status, false);
         reply->deleteLater();
-        emit loginFinished(ok, ok ? tr("登录成功。") : status == 401 ? tr("账号或密码错误。") : tr("登录失败，请检查服务与网络。"));
+        emit loginFinished(ok, message);
     });
+}
+void ApiClient::registerUser(const QUrl &serverUrl, const QString &username, const QString &password) {
+    if (authenticationReply_) return;
+    if (!validServer(serverUrl)) {
+        emit registrationFinished(false, tr("服务器地址无效，请返回登录页修改。"));
+        return;
+    }
+    const QJsonObject body{{"username", username}, {"password", password}};
+    auto *reply = manager_->post(request(serverUrl, "/api/v1/auth/register", false),
+                                QJsonDocument(body).toJson(QJsonDocument::Compact));
+    authenticationReply_ = reply;
+    timeoutReply(reply, authenticationTimeoutMs_);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, username] {
+        authenticationReply_.clear();
+        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        QJsonParseError error;
+        const auto doc = QJsonDocument::fromJson(reply->isReadable() ? reply->readAll() : QByteArray(), &error);
+        const auto user = doc.object()["user"].toObject();
+        const bool created = reply->error() == QNetworkReply::NoError && status == 201
+            && error.error == QJsonParseError::NoError && doc.isObject()
+            && !user["id"].toString().isEmpty() && user["username"].toString() == username;
+        const QString message = created ? tr("注册成功，请登录。")
+                                        : authenticationFailure(reply, status, true);
+        reply->deleteLater();
+        emit registrationFinished(created, message);
+    });
+}
+void ApiClient::cancelAuthentication() {
+    if (!authenticationReply_) return;
+    auto *reply = authenticationReply_.data();
+    authenticationReply_.clear();
+    // abort 会触发 finished：先断开结果回调，避免关闭窗口后仍进行页面切换。
+    disconnect(reply, nullptr, this, nullptr);
+    reply->abort();
+    reply->deleteLater();
 }
 void ApiClient::verifySession(const QUrl &serverUrl) {
     auto *reply = manager_->get(request(serverUrl, "/api/v1/auth/me", true));
@@ -113,12 +183,16 @@ void ApiClient::downloadFile(const QUrl &serverUrl, const QString &remoteName, c
 }
 
 // 构造函数
-ApiClient::ApiClient(QObject* parent)
+ApiClient::ApiClient(QObject* parent, int authenticationTimeoutMs)
     : QObject(parent)
+    , authenticationTimeoutMs_(qMax(1, authenticationTimeoutMs))
 {
     // 创建网络管理器
     // parent 为 this，ApiClient 销毁时会自动销毁 manager_
     manager_ = new QNetworkAccessManager(this);
+}
+ApiClient::~ApiClient() {
+    cancelAuthentication();
 }
 
 // 测试服务器连接

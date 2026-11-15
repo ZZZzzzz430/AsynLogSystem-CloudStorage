@@ -24,6 +24,8 @@ set(PROJECT_SOURCES
     # 登录窗口用代码搭建界面；Q_OBJECT 所在头文件交给 AUTOMOC 生成元对象。
     loginwindow.cpp
     loginwindow.h
+    registerdialog.cpp
+    registerdialog.h
     # 共用配色与 QPainter 图标，不新增资源包或 Qt 模块依赖。
     clienttheme.cpp
     clienttheme.h
@@ -80,4 +82,12 @@ if(BUILD_TESTING)
     qt_add_executable(client_ui_smoke tests/login_ui_smoke.cpp ${CLIENT_UI_TEST_SOURCES})
     target_include_directories(client_ui_smoke PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(client_ui_smoke PRIVATE Qt6::Widgets Qt6::Network)
+
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+    qt_add_executable(client_registration_tests tests/registration_test.cpp ${CLIENT_UI_TEST_SOURCES})
+    target_include_directories(client_registration_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(client_registration_tests PRIVATE Qt6::Widgets Qt6::Network Qt6::Test)
+    add_test(NAME qt_registration_interactions COMMAND client_registration_tests -platform offscreen
+        -o registration-tests.txt,txt)
+    set_tests_properties(qt_registration_interactions PROPERTIES TIMEOUT 60)
 endif()

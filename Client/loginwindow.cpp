@@ -2,6 +2,7 @@
 
 #include "ApiClient.hpp"
 #include "clienttheme.h"
+#include "registerdialog.h"
 
 #include <QAction>
 #include <QCheckBox>
@@ -32,9 +33,10 @@ void addField(QVBoxLayout *layout, QWidget *card, const QString &title, QWidget 
 } // namespace
 
 // 构造时只创建对象并接线；不主动登录、不读取或保存密码。
-LoginWindow::LoginWindow(QWidget *parent)
+LoginWindow::LoginWindow(QWidget *parent, int authenticationTimeoutMs)
     : QDialog(parent)
-    , client_(new ApiClient(this))
+    , client_(new ApiClient(this, authenticationTimeoutMs))
+    , authenticationTimeoutMs_(authenticationTimeoutMs)
 {
     setupUi();
     setupConnections();
@@ -175,21 +177,20 @@ void LoginWindow::setupUi()
     separator->setFixedHeight(1);
     form->addWidget(separator);
     auto *links = new QHBoxLayout;
-    auto *registerButton = new QPushButton(tr("注册账号"), card);
+    registerButton_ = new QPushButton(tr("注册账号"), card);
     auto *forgotButton = new QPushButton(tr("忘记密码？"), card);
-    for (auto *button : {registerButton, forgotButton}) {
+    for (auto *button : {registerButton_, forgotButton}) {
         button->setObjectName(QStringLiteral("textButton"));
         button->setAutoDefault(false);
         button->setCursor(Qt::PointingHandCursor);
     }
-    links->addWidget(registerButton);
+    registerButton_->setObjectName(QStringLiteral("registerButton"));
+    registerButton_->setProperty("textLink", true);
+    links->addWidget(registerButton_);
     links->addStretch();
     links->addWidget(forgotButton);
     form->addLayout(links);
-    // TODO E03：接注册/找回页面；当前不打开虚构的远端地址。
-    connect(registerButton, &QPushButton::clicked, this, [this] {
-        showStatus(tr("注册服务暂不可用，请联系管理员。"));
-    });
+    connect(registerButton_, &QPushButton::clicked, this, &LoginWindow::onRegisterClicked);
     connect(forgotButton, &QPushButton::clicked, this, [this] {
         showStatus(tr("请联系管理员重置密码。"));
     });
@@ -227,7 +228,7 @@ bool LoginWindow::readServerUrl(QUrl &url)
     return true;
 }
 
-// 只发送现有的 GET /，不提交凭据，也不会发认证成功信号。
+// 只发送 GET /health，不提交凭据，也不会发认证成功信号。
 void LoginWindow::onTestConnectionClicked()
 {
     if (connectionPending_ || loginPending_) return;
@@ -237,6 +238,7 @@ void LoginWindow::onTestConnectionClicked()
     testConnectionButton_->setEnabled(false);
     loginButton_->setEnabled(false);
     serverCombo_->setEnabled(false);
+    registerButton_->setEnabled(false);
     showStatus(tr("正在连接服务器……"));
     client_->testConnection(url);
 }
@@ -248,6 +250,7 @@ void LoginWindow::onConnectionFinished(bool ok, int httpStatus, const QString &m
     testConnectionButton_->setEnabled(!loginPending_);
     loginButton_->setEnabled(!loginPending_);
     serverCombo_->setEnabled(!loginPending_);
+    registerButton_->setEnabled(!loginPending_);
     showStatus(ok ? tr("服务器可达，HTTP %1。请继续登录。").arg(httpStatus)
                   : tr("连接失败：%1").arg(message), ok ? "success" : "error");
 }
@@ -269,7 +272,7 @@ void LoginWindow::onLoginClicked()
     showStatus(tr("正在验证身份……"));
     passwordEdit_->clear(); // 不是安全内存擦除，只缩短输入框保存密码的时间。
     passwordVisibilityAction_->setChecked(false);
-    // 先置等待状态再 emit，支持当前 TODO 同步回传失败；emit 后不覆盖结果。
+    // 先置等待状态再 emit，也支持地址错误的同步回传；emit 后不覆盖结果。
     emit loginRequested(url, account, password);
 }
 
@@ -297,6 +300,40 @@ void LoginWindow::setLoginPending(bool pending)
     passwordEdit_->setEnabled(!pending);
     loginButton_->setEnabled(!pending && !connectionPending_);
     testConnectionButton_->setEnabled(!pending && !connectionPending_);
+    registerButton_->setEnabled(!pending && !connectionPending_);
+    loginButton_->setText(pending ? tr("登录中……") : tr("登录"));
+}
+
+void LoginWindow::onRegisterClicked()
+{
+    if (loginPending_ || connectionPending_) return;
+    if (registerDialog_) {
+        registerDialog_->raise();
+        registerDialog_->activateWindow();
+        return;
+    }
+    QUrl url;
+    if (!readServerUrl(url)) return;
+    auto *dialog = new RegisterDialog(url, this, authenticationTimeoutMs_);
+    registerDialog_ = dialog;
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &RegisterDialog::registrationSucceeded, this, [this](const QString &username) {
+        accountEdit_->setText(username);
+        passwordEdit_->clear();
+        passwordVisibilityAction_->setChecked(false);
+        showStatus(tr("注册成功，请输入密码登录。"), "success");
+        passwordEdit_->setFocus();
+    });
+    dialog->open(); // 异步打开，避免 exec() 的嵌套事件循环。
+}
+
+void LoginWindow::reject()
+{
+    if (registerDialog_) registerDialog_->reject();
+    client_->cancelAuthentication();
+    setLoginPending(false);
+    passwordEdit_->clear();
+    QDialog::reject();
 }
 
 // 动态属性仅改变提示颜色，必须重新应用样式；不发任何业务信号。

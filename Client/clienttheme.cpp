@@ -147,14 +147,14 @@ QString ClientTheme::styleSheet()
         QLabel#loginTitle { font-size: 20px; font-weight: 600; }
         QLabel#pageTitle { font-size: 25px; font-weight: 700; }
         QLabel#fieldLabel { font-size: 13px; font-weight: 600; }
-        QLabel#mutedText, QLabel#loginStatusLabel { color: #7c8aa2; font-size: 12px; }
+        QLabel#mutedText, QLabel#loginStatusLabel, QLabel#registerStatusLabel { color: #7c8aa2; font-size: 12px; }
         QLabel#pageSubtitle, QLabel#sidebarDescription, QLabel#serverCaption,
         QLabel#serverHintLabel, QLabel#emptyDescription, QLabel#transferStatusLabel,
         QLabel#connectionStatusLabel { color: #7c8aa2; font-size: 12px; }
         QLabel#localFileTitle, QLabel#downloadTitle, QLabel#connectionTitle,
         QLabel#emptyTitle { font-weight: 600; }
-        QLabel#loginStatusLabel[state="error"] { color: #c33c4b; }
-        QLabel#loginStatusLabel[state="success"] { color: #17846c; }
+        QLabel#loginStatusLabel[state="error"], QLabel#registerStatusLabel[state="error"] { color: #c33c4b; }
+        QLabel#loginStatusLabel[state="success"], QLabel#registerStatusLabel[state="success"] { color: #17846c; }
         QLineEdit, QComboBox { background: white; border: 1px solid #dce4ef;
             border-radius: 7px; min-height: 38px; padding: 0px 12px;
             selection-background-color: #cfe3ff; }
@@ -171,7 +171,7 @@ QString ClientTheme::styleSheet()
         QPushButton[primary="true"]:hover { background: #0868ee; }
         QPushButton[primary="true"]:pressed { background: #075bd1; }
         QPushButton#testConnectionButton { background: #f0f7ff; border-color: #c5ddff; }
-        QPushButton#textButton { border: none; background: transparent;
+        QPushButton#textButton, QPushButton[textLink="true"] { border: none; background: transparent;
             color: #1979ff; padding: 0px; min-height: 24px; text-align: left; }
         QPushButton#filesButton { text-align: left; background: #e8f2ff; color: #1979ff;
             border: none; font-weight: 600; min-height: 44px; }

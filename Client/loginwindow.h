@@ -4,6 +4,7 @@
 #include <QDialog>
 #include <QString>
 #include <QUrl>
+#include <QPointer>
 
 class QAction;
 class ApiClient;
@@ -11,6 +12,7 @@ class QComboBox;
 class QLabel;
 class QLineEdit;
 class QPushButton;
+class RegisterDialog;
 
 // 登录窗口只收集输入和展示状态，不判断账号真伪，也不创建主窗口。
 // 本类和所有控件均在 GUI 线程使用；异步认证结果应通过带 context 的信号槽返回。
@@ -21,18 +23,18 @@ class LoginWindow : public QDialog
 public:
     // main() 在栈上创建无父窗口的 LoginWindow，使其存活到事件循环结束。
     // 如果传入 parent，则仍遵循 Qt 的父子对象所有权规则。
-    explicit LoginWindow(QWidget *parent = nullptr);
+    explicit LoginWindow(QWidget *parent = nullptr, int authenticationTimeoutMs = 10000);
     ApiClient *apiClient() const { return client_; }
 
 public slots:
+    void reject() override;
     // 认证结果的唯一接入口；只处理本窗口正在等待的一次请求。
-    // verified 必须来自未来真实认证模块，不能由连接成功、非空输入或定时器推导。
-    // message 用于失败提示；当前 ApiClient::login() 的 TODO 占位只传 false。
+    // verified 来自 ApiClient 对 HTTP 状态、token、用户信息和有效期的确认。
     void handleLoginResult(bool verified, const QString &message);
 
 signals:
     // 输入非空后发出请求意图；非空检查只是界面预检，不代表认证通过。
-    // TODO：未来接认证模块；跨异步边界时由接收方管理凭据寿命，禁止记录密码。
+    // 由 ApiClient 异步认证，禁止记录密码。
     void loginRequested(const QUrl &serverUrl, const QString &account, const QString &password);
 
     // 只有 handleLoginResult() 收到真实成功结果时才发出，由 main() 负责切窗口。
@@ -53,7 +55,7 @@ private:
     // 检查并返回 http(s) 根地址，失败只显示提示，不发网络请求。
     bool readServerUrl(QUrl &url);
 
-    // 复用已有 GET / 连接测试，不提交任何账号密码。
+    // 复用 GET /health 连接测试，不提交任何账号密码。
     void onTestConnectionClicked();
 
     // 展示测试结果并恢复按钮，不改变认证状态。
@@ -64,6 +66,7 @@ private:
 
     // 读取输入、完成最小非空检查、进入等待状态，再发 loginRequested。
     void onLoginClicked();
+    void onRegisterClicked();
 
     // 同步等待标记和控件可用状态，防止一次认证尚未结束时重复提交。
     void setLoginPending(bool pending);
@@ -75,6 +78,7 @@ private:
     QAction *passwordVisibilityAction_ = nullptr;
     QPushButton *loginButton_ = nullptr;
     QPushButton *testConnectionButton_ = nullptr;
+    QPushButton *registerButton_ = nullptr;
     QLabel *statusLabel_ = nullptr;
 
     // 客户端随窗口销毁，内部 manager/reply/timer 沿用 QObject 父子清理机制。
@@ -85,6 +89,8 @@ private:
     // 仅在 GUI 线程读写，不引入线程、锁或网络请求。
     bool loginPending_ = false;
     bool connectionPending_ = false;
+    QPointer<RegisterDialog> registerDialog_;
+    int authenticationTimeoutMs_;
 };
 
 #endif // LOGINWINDOW_H

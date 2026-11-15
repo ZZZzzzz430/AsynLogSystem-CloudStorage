@@ -6,19 +6,26 @@
 #include <QDateTime>
 #include <QNetworkRequest>
 #include <QNetworkAccessManager>
+#include <QPointer>
+
+class QNetworkReply;
 
 class ApiClient : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit ApiClient(QObject* parent = nullptr);
+    explicit ApiClient(QObject* parent = nullptr, int authenticationTimeoutMs = 10000);
+    ~ApiClient() override;
 
     void testConnection(const QUrl& serverUrl);
 
     // Login and subsequent authenticated requests share one in-memory session.
     // 不记录密码、不保存凭据到成员、不把网络可达作为身份有效。
     void login(const QUrl &serverUrl, const QString &account, const QString &password);
+    void registerUser(const QUrl &serverUrl, const QString &username, const QString &password);
+    // 关闭认证窗口时丢弃本地结果；不能保证服务端尚未完成注册。
+    void cancelAuthentication();
 
     // TODO E04：实现上传请求，并保证 QFile 的寿命覆盖 reply 的异步读取。
     void uploadFile(const QUrl &serverUrl, const QString &localPath);
@@ -34,6 +41,7 @@ signals:
     void logoutFinished(bool completed, const QString &message);
     // 认证结果与连接测试结果分属两个通道。
     void loginFinished(bool verified, const QString &message);
+    void registrationFinished(bool created, const QString &message);
 
     // completed=true 必须代表最终确认完成；占位传输永远返回 false。
     void uploadFinished(bool completed, const QString &message);
@@ -55,5 +63,6 @@ private:
     QByteArray token_;
     QDateTime expiresAt_;
     QUrl sessionServer_;
-    bool loginPending_ = false;
+    QPointer<QNetworkReply> authenticationReply_;
+    int authenticationTimeoutMs_;
 };
