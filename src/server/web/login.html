@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+       <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>云盘登录</title>
+</head>
+<body>
+    <h1>登录云盘</h1>
+    <form id="login-form">
+        <label>账号 <input id="account" autocomplete="username" required></label>
+        <label>密码 <input id="password" type="password"
+            autocomplete="current-password" required></label>
+        <button id="login-button" type="submit">登录</button>
+    </form>
+    <p id="message" role="status" aria-live="polite"></p>
+    <script type="module" src="/assets/login.js"></script>
+</body>
+</html>

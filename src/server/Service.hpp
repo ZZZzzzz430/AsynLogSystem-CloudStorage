@@ -21,6 +21,7 @@
 #include <chrono>
 #include <sstream>
 #include <cstdio>
+#include "WebPages.hpp"
 
 extern storage::DataManager *data_;
 namespace storage
@@ -107,6 +108,9 @@ namespace storage
             // 绑定端口和ip
             if (evhttp_bind_socket(httpd, "0.0.0.0", server_port_) != 0)
             {
+                std::cerr << "[HTTP] 无法监听端口 " << server_port_
+                          << ": " << strerror(errno)
+                          << "；请检查是否已有服务运行。" << std::endl;
                 mylog::GetLogger("asynclogger")->Error("evhttp_bind_socket failed!");
                 evhttp_free(httpd); event_base_free(base);
                 return false;
@@ -159,6 +163,8 @@ namespace storage
             mylog::GetLogger("asynclogger")->Info("get req, uri: %s", path.c_str());
 
             auto &self = *static_cast<Service *>(arg);
+            // 仅公开页面和脚本白名单可在会话校验前响应。
+            if (WebPages::handle(req, path)) return;
             if (auth::AuthHttp::handle(req, path, self.auth_)) return;
             // Legacy storage routes require a valid session as well. File ownership
             // remains in the legacy metadata format and is not introduced here.

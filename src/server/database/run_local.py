@@ -5,6 +5,10 @@ import os
 from pathlib import Path
 import sys
 ROOT = Path(__file__).resolve().parents[3]
+if len(sys.argv) == 1:
+    # The server loads Storage.conf and log configuration relative to this directory.
+    os.chdir(ROOT / 'src/server')
+    sys.argv.extend(['runtime', './gdb_test'])
 if len(sys.argv) < 3 or sys.argv[1] not in ('runtime', 'test', 'http-test'):
     raise SystemExit('Usage: run_local.py runtime|test|http-test COMMAND [ARGS...]')
 path = ROOT / 'build/local-auth' / (sys.argv[1] + '.json')

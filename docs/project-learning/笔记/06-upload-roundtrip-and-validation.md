@@ -64,94 +64,15 @@ HTTP 线程 Test.cpp:service_module
 
 ## 4. 独立实验目录
 
-从项目根目录执行，复制最小运行环境，避免覆盖已有文件。以下命令供你执行，本次尚未运行。
-
-```bash
-make -C src/server gdb_test
-export LAB_ROOT=$(mktemp -d /tmp/asynlog-stage2.XXXXXX)
-mkdir -p "$LAB_ROOT/src/server" "$LAB_ROOT/log_system/logs_code"
-cp src/server/gdb_test src/server/Storage.conf src/server/index.html "$LAB_ROOT/src/server/"
-cp log_system/logs_code/config.conf "$LAB_ROOT/log_system/logs_code/"
-python3 - "$LAB_ROOT/src/server/Storage.conf" <<'PYCONF'
-import json, sys
-p = sys.argv[1]
-with open(p) as f:
-    config = json.load(f)
-config['server_port'] = 18081
-with open(p, 'w') as f:
-    json.dump(config, f, indent=2)
-PYCONF
-printf '%s\n' "$LAB_ROOT"
-cd "$LAB_ROOT/src/server"
-./gdb_test
-```
-
-另开终端，将下面路径替换成上一步打印的真实路径：
-
-```bash
-export LAB_ROOT=/tmp/asynlog-stage2.实际后缀
-export BASE=http://127.0.0.1:18081
-ss -ltnp 'sport = :18081'
-printf 'stage2 roundtrip\n' > "$LAB_ROOT/payload.txt"
-export FILE_B64=$(printf %s stage2.txt | base64 -w0)
-curl --max-time 10 -sS -D "$LAB_ROOT/upload.headers" \
-  -H "FileName: $FILE_B64" -H 'StorageType: low' \
-  --data-binary @"$LAB_ROOT/payload.txt" "$BASE/upload"
-curl --max-time 10 -fsS "$BASE/" -o "$LAB_ROOT/list.html"
-curl --max-time 10 -fsS "$BASE/download/stage2.txt" -o "$LAB_ROOT/download.txt"
-cmp "$LAB_ROOT/payload.txt" "$LAB_ROOT/download.txt"
-sha256sum "$LAB_ROOT/payload.txt" "$LAB_ROOT/download.txt"
-rg 'stage2.txt' "$LAB_ROOT/list.html" "$LAB_ROOT/src/server/storage.data"
-```
-
-预期：上传 200；列表和元数据含目标文件；`cmp` 退出 0；两个摘要一致。上传使用原始请求体，不使用 `curl -F`，因为代码没有解析 multipart 表单。暂不发送 Range 请求；现有返回 206 的分支不能证明实现了区间下载。
+本节内容已归档至[对应测试与验证说明](../../maintenance/testing/历史-06-upload-roundtrip-and-validation-测试与验证.md)，保留原章节编号便于对照。
 
 ## 5. GDB：证明执行线程与数据变化
 
-先在运行服务的终端 Ctrl+C 停止该实验进程，再从同一个实验工作目录启动：
-
-```text
-gdb ./gdb_test
-set pagination off
-break storage::Service::Upload
-break storage::FileUtil::SetContent
-break storage::DataManager::Insert
-run
-```
-
-另一个终端重新发送正常上传。命中 `Upload` 后执行 `bt`、`info threads`，记下当前线程号。用 `next` 走过对应变量初始化后观察：
-
-```text
-p len
-p content.size()
-p filename
-p storage_type
-p storage_path
-```
-
-在初始化之前查看变量可能看到无效值。命中 `SetContent` 时用 `bt`、`p filename_`、`p len` 区分“文件内容写入”和“storage.data 写入”，同一个函数会承担两种用途。命中 `Insert` 后执行 `p info.url_`、`p info.storage_path_`，比较各断点线程号。
-
-最后执行 `thread apply all bt`：找到主线程的 join、HTTP 回调，以及日志相关线程。启动阶段也可能先命中 `SetContent`，根据调用栈判断后继续，不能把第一次命中一律当成上传。
+本节内容已归档至[对应测试与验证说明](../../maintenance/testing/历史-06-upload-roundtrip-and-validation-测试与验证.md)，保留原章节编号便于对照。
 
 ## 6. 故障实验：先保存现象，再定位
 
-保持其他字段有效，仅省略 FileName：
-
-```bash
-curl --max-time 5 -v -H 'StorageType: low' \
-  --data-binary @"$LAB_ROOT/payload.txt" "$BASE/upload"
-```
-
-现在已知现象是什么？记录 HTTP 状态或连接错误、服务是否仍监听、终端诊断；没有 HTTP 响应就写“未收到响应”，不要编造为 500。
-
-排查顺序：
-
-1. 假设是请求拒绝、线程卡住或进程异常退出，分别用响应、`ss` 和 GDB 栈取证。
-2. GDB 加 `catch throw`，重新运行并复现；若异常停住，执行 `bt`，定位第一个项目代码栈帧。
-3. 在 `Upload` 里观察请求头查询的返回值与后续字符串构造，比较正常请求和缺字段请求。
-4. 暂不改日志、网络库或元数据模块；先证明错误发生在哪一步。
-
-若本机表现不同，保留实际栈和输出。故障表现在此不预先写成已验证结论。
+本节内容已归档至[对应测试与验证说明](../../maintenance/testing/历史-06-upload-roundtrip-and-validation-测试与验证.md)，保留原章节编号便于对照。
 
 ## 7. 核心改造：为 Upload 建立输入契约
 
@@ -179,28 +100,7 @@ curl --max-time 5 -v -H 'StorageType: low' \
 
 ## 8. Linux、并发与性能观察
 
-从 `ss -ltnp` 输出取得实验进程 PID，替换下面的 PID：
-
-```bash
-ps -L -p PID -o pid,tid,stat,pcpu,comm
-```
-
-看 TID 区分线程，看 STAT 和 %CPU 判断采样时状态。空闲时多数线程休眠并不异常；请求慢而 CPU 低也不能单凭这一点断定磁盘慢。结合 `thread apply all bt` 确认是否等待锁、网络或其他操作。
-
-如需观察文件 IO，停止原进程后从实验目录启动：
-
-```bash
-strace -f -tt -T -e trace=openat,write,close,fsync,fdatasync \
-  -o "$LAB_ROOT/io.trace" ./gdb_test
-```
-
-看 TID、文件打开路径、返回值和调用耗时；日志文件与上传文件都可能出现 write，要通过 openat 返回的 fd 和线程关联。短 write 耗时不等于物理磁盘已完成。未安装 strace 时先用 GDB 完成主实验，不让工具安装阻塞改造。
-
-并发实验：用 1、2、6 个客户端上传各自唯一命名的同样大小文件，每次用 curl 的 `-w '%{http_code} %{time_total}\n'` 保存状态和时间，再逐个下载校验。正常预期是内容正确，延迟可能增加；具体吞吐和延迟必须实测，不预填数字。
-
-100 个客户端暂作推演：竞争事件循环处理时间、文件 IO、元数据全表序列化、日志 Buffer；当前串行回调不代表这些资源没有瓶颈。不要直接把吞吐下降归因为 `table_` 写锁。
-
-若未来增加 HTTP 工作线程，`table_` 有锁也不足以保证同名文件写入和 `storage.data` 持久化安全。当前同名上传即使串行，也会覆盖相同文件和 URL 索引；本阶段并发测试使用唯一文件名。
+本节内容已归档至[对应测试与验证说明](../../maintenance/testing/历史-06-upload-roundtrip-and-validation-测试与验证.md)，保留原章节编号便于对照。
 
 ## 9. 范围与通过标准
 
@@ -219,59 +119,8 @@ strace -f -tt -T -e trace=openat,write,close,fsync,fdatasync \
 
 ## 10. 2026-10-08：Service.hpp 修改评审
 
-结论：当前修改尚不满足本文件第 7 节的入口校验要求，暂不通过。证据为当前源码、Git 差异，以及实际执行 `make -C src/server gdb_test` 的结果（退出码 2）。本次未修改业务代码；未运行当前版本的 HTTP 验收，因为当前版本无法编译。已有二进制不能证明这些修改生效。
-
-### 编译阻塞：实际编译确认的四处错误
-
-| 当前位置 | 问题 | 修正方向 |
-|---|---|---|
-| `Service.hpp:119` | `UploadParams` 结构体结尾缺分号 | 以 `};` 结束 |
-| `Service.hpp:136` | 条件末尾为 `filename == ".." ||)`，缺少右操作数 | 删除末尾多余的 `||` |
-| `Service.hpp:124、154` | 枚举声明为 `MethodNotAllowd`，使用为 `MethodNotAllowed` | 统一为 `MethodNotAllowed` |
-| `Service.hpp:188` | `base64_decode(name)` 调用歧义：C++17 下同时存在 `std::string` 和 `std::string_view` 重载 | 指针校验成功后显式传入 `std::string(name)` |
-
-### 核心行为缺口：校验尚未进入请求链路
-
-`GenHandler → Upload` 的调用链仍直接执行原有上传逻辑，`Upload` 没有调用 `ValidateUploadRequest`，也没有使用 `UploadParams`。因此，即使仅修复以上编译错误，新校验仍不会生效：
-
-- 方法检查被注释，不能保证非 POST 返回 405 和 `Allow: POST`。
-- 原有 `Upload` 在第 232 行分配 `content`，此前没有大小限制，不能保证超限返回 413。
-- 第 241、246 行仍将请求头返回指针直接用于构造字符串；缺失头的异常风险仍在。空头也未在实际处理链路拒绝。
-- 解码后的文件名仍未经 `IsValidFilename` 检查就拼入存储路径，不能保证非法文件名在创建目录、写文件和更新索引前被拒绝。
-- `UploadError` 还没有映射到 HTTP 响应；返回枚举本身不会回复客户端。
-
-已有辅助函数的拆分方向合理：先检查方法、请求体和大小，再检查请求头、存储类型、解码后文件名；`len > 1024 * 1024` 的比较保留了恰好 1 MiB 的合法边界；文件名检查覆盖了任务要求的类别。这些属于源码设计评价，尚不是运行通过。
-
-### 下一次修改与验收顺序
-
-1. 先修复四处编译错误。
-2. 在 `Upload` 开头、分配 `content` 之前调用校验函数。失败时将方法错误映射为 405（加 `Allow: POST`），超限映射为 413，其余输入错误映射为 400；每个失败请求回复一次并立即返回。
-3. 成功后使用 `params.filename / storageType / contentLength` 继续原上传流程，替换旧的未经检查的请求头读取与重复解码。
-4. 重新编译，在独立实验目录用新二进制执行第 7 节全部拒绝分支、1 MiB 和 1 MiB + 1 边界，以及正常上传、列表、下载内容比对。检查每次拒绝没有改变存储文件与索引，并确认合法请求仍可继续成功。
-
-补充健壮性问题：本仓库 `base64.cpp` 的解码器遇到部分非法字符或不完整输入会抛出 `std::runtime_error` / `std::out_of_range`。当前校验函数未捕获。第 7 节不要求实现严格 Base64 校验器，但建议在解码边界捕获这两种输入异常并返回文件名错误，避免异常逃出 HTTP 回调；这一点是补充建议，不将严格 Base64 校验追加为原任务要求。
-
-本次只完成代码评审与编译验证；正常闭环、故障调用栈、边界无副作用证据和第 9 节三题回答尚未在本次验证中完成，不标记整个学习模块通过。
+本节内容已归档至[对应测试与验证说明](../../maintenance/testing/历史-06-upload-roundtrip-and-validation-测试与验证.md)，保留原章节编号便于对照。
 
 ## 11. 2026-10-08：按授权修正，等待 HTTP 实验
 
-用户要求助手修正到能够编译且符合入口要求，HTTP 测试等内容留到次日由用户完成。本次已修改 `Service.hpp`：
-
-- 修正结构体分号、条件表达式、枚举拼写和 Base64 重载歧义。
-- 在 `Upload` 开头调用 `ValidateUploadRequest`；失败回复一次并立即返回，先于内容字符串分配、目录创建、文件写入和索引更新。
-- 非 POST 映射为 405，并添加 `Allow: POST`；大于 1048576 字节映射为 413；空请求体、缺失或空头、非法类型、非法解码后文件名映射为 400。
-- 成功路径使用校验后的参数，移除旧的直接从请求头指针构造字符串与重复解码。解码器的输入异常转换为文件名错误。
-- 配置 libevent 允许其支持的全部已知方法进入路由，避免 PUT、PATCH 等方法在到达上传入口前被库的默认方法策略拒绝。此设置作用于整个 HTTP 服务；上传入口仍只接受 POST。
-- 请求内容复制使用 C++17 的可写 `content.data()`，检查实际复制字节数；长度日志格式改为 `%zu`。
-
-实际验证：`make -C src/server gdb_test` 和 `make -C src/server -B test` 均退出 0；`git diff --check` 通过。`gdb_test`、`test` 已重新生成。本次未启动服务、未执行 HTTP 测试，也未修改存储数据。
-
-明日按第 4、7 节进行独立目录验收，务必复制本次新生成的二进制。重点记录：
-
-1. 合法上传 200，列表和元数据可查，下载后 `cmp` 与 SHA-256 一致。
-2. GET、PUT、PATCH 等非 POST 请求 `/upload` 返回 405，响应头包含 `Allow: POST`。
-3. 空体、两个头分别缺失或为空、非法类型，以及解码后为空、`.`、`..`、含 `/`、反斜杠、NUL 的文件名分别返回 400。可以补测非法 Base64 字符和单字符输入，确认进程仍存活。
-4. 恰好 1048576 字节成功，1048577 字节返回 413。
-5. 每次拒绝前后比较存储目录与 `storage.data`，确认无变化；随后发送合法请求，确认服务继续可用。
-
-当前结论：源码已落实本次入口契约、编译通过，运行行为待实测；整个阶段仍待实验和复盘。请求体大小检查仍发生在 libevent 已接收请求体之后；存储失败传播问题仍按第 9 节记录为后续范围。
+本节内容已归档至[对应测试与验证说明](../../maintenance/testing/历史-06-upload-roundtrip-and-validation-测试与验证.md)，保留原章节编号便于对照。

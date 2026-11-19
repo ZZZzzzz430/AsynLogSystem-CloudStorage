@@ -14,7 +14,7 @@
 
 ## 这次实现
 
-1. 数据库：新增 [正式迁移](../../src/server/database/migrations/001_auth.sql)，users 与 sessions；UTC 时间，用户外键与到期索引。不删除已有数据。单独测试库 asynlog_storage_test。
+1. 数据库：新增 [正式迁移](../../../src/server/database/migrations/001_auth.sql)，users 与 sessions；UTC 时间，用户外键与到期索引。不删除已有数据。单独测试库 asynlog_storage_test。
 2. SQL：新增 Statement.hpp，用 MYSQL_STMT 的 prepare/bind/execute/fetch，所有外部值绑定；NULL/截断检查、异常状态和 RAII；UserRepository 查询/插入实现。
 3. 密码：OpenSSL scrypt，N=131072/r=8/p=1，16 字节随机盐、32 字节派生键；带参数编码，CRYPTO_memcmp 比较。不识别明文密码，未迁移其他项目密码。不存在用户也做派生。
 4. 会话：32 字节随机 token；仅数据库保存 SHA-256 摘要。8 小时有效期，创建/查询/删除由 SessionRepository 实现，每次验证查库，重启无需恢复内存缓存。

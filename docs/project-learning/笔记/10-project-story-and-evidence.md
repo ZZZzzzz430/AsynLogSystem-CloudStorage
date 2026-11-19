@@ -19,7 +19,7 @@ HTTP 线程：libevent 分派 → 上传/列表/下载 → 同步文件操作与
             ↑ 调用线程 serialize 中的 future.get 仍等待它
 ```
 
-查证位置：[Test.cpp](../../src/server/Test.cpp)、[Service.hpp](../../src/server/Service.hpp)、[AsyncLogger.hpp](../../log_system/logs_code/AsyncLogger.hpp)、[AsyncWorker.hpp](../../log_system/logs_code/AsyncWorker.hpp)。默认日志器和命名日志器各有工作器，不能把整个服务说成“只有一个后台线程”；HTTP 单事件线程也不等于整个进程单线程。
+查证位置：[Test.cpp](../../../src/server/Test.cpp)、[Service.hpp](../../../src/server/Service.hpp)、[AsyncLogger.hpp](../../../log_system/logs_code/AsyncLogger.hpp)、[AsyncWorker.hpp](../../../log_system/logs_code/AsyncWorker.hpp)。默认日志器和命名日志器各有工作器，不能把整个服务说成“只有一个后台线程”；HTTP 单事件线程也不等于整个进程单线程。
 
 数据主线：请求体 → libevent evbuffer → string → 普通写盘或压缩写盘 → StorageInfo → DataManager 内存表与 storage.data。日志是另一条支线，格式化与复制发生在调用线程，输出主要由后台完成。
 
@@ -63,7 +63,7 @@ HTTP 线程：libevent 分派 → 上传/列表/下载 → 同步文件操作与
 | HTTP 调用链 | 用户在 09 记录 Upload 的线程编号和调用链 | 完整原始栈与 SetContent 栈可回头补 |
 | 回调耗时记录 | bug记录 的编译、独立 HTTP 和慢计时器测试 | 不等于完成并发阻塞对照，不等于文件写入单项耗时 |
 
-详细记录：[07](07-async-log-handoff-and-backpressure.md)、[08](08-slow-consumer-and-bounded-push.md)、[09](09-review-backlog-and-http-blocking.md)、[bug记录](bug记录.md)。本块没有重新运行这些实验，不把历史结果写成今天的重复实测。
+详细记录：[07](07-async-log-handoff-and-backpressure.md)、[08](08-slow-consumer-and-bounded-push.md)、[09](09-review-backlog-and-http-blocking.md)、[bug记录](../../maintenance/fixes/历史-Service计时器修复.md)。本块没有重新运行这些实验，不把历史结果写成今天的重复实测。
 
 ## 6. 本轮实操与验收
 
@@ -81,6 +81,6 @@ HTTP 线程：libevent 分派 → 上传/列表/下载 → 同步文件操作与
 先判断响应 200 是在提交任务后返回还是写入文件后返回、或者是校验文件后。如果是设计层面的缺陷重启不能改变，读写锁不能提供，因为读写锁只负责数据同步资源交互，对于文件完整没有帮助。
 4. 你独立写了什么、评审帮你修了什么、哪些测试自己真正运行过？给出一个具体例子。
 
-第 3 题先沿 [DataManager.hpp](../../src/server/DataManager.hpp) 的 Insert → Storage 和 Service::Upload 阅读：当前 Storage 对 SetContent 失败记录日志后仍返回 true，Upload 也未检查 Insert 返回值。这是源码发现，尚未在本块复现或修复；不要把“知道风险”说成“已解决一致性”。
+第 3 题先沿 [DataManager.hpp](../../../src/server/DataManager.hpp) 的 Insert → Storage 和 Service::Upload 阅读：当前 Storage 对 SetContent 失败记录日志后仍返回 true，Upload 也未检查 Insert 返回值。这是源码发现，尚未在本块复现或修复；不要把“知道风险”说成“已解决一致性”。
 
 通过标准：介绍结构清楚、案例能解释因果和验证、贡献与限制准确。先做到这一轮，再决定是补一个存储错误传播案例还是回头补 HTTP 证据；本次不自动布置下一项代码改造。
